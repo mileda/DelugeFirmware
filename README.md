@@ -1,18 +1,18 @@
 # Deluge MDD Snake + Plaits — custom firmware
 
-Unofficial OLED-focused modification of Synthstrom Audible's Deluge Community Firmware, based on 1.3.0 beta (Derbyshire), upstream beta commit `be3e993c4ae78719d3940f334848aa77973ea585`, plus reverb PR #4990.
+Unofficial OLED-focused modification of Synthstrom Audible's Deluge Community Firmware, based on 1.3.0 RC2 (Derbyshire), upstream tag `v1.3.0-rc2` at `465a30985fad185beddc639e14667c86f97e89b9`, retaining MDD, Plaits and custom reverb controls.
 
-**Modified source published 13 October 2026.** This repository contains editable source code, third-party source, build scripts and regression tests. It is not an official Synthstrom or Mutable Instruments release.
+**RC2 source and firmware published 21 October 2026.** This repository contains editable source code, third-party source, build scripts and regression tests. It is not an official Synthstrom or Mutable Instruments release.
 
 - MDD Snake: alternative clip sequencer with Notes, Gate, Velocity and four independent Custom modulation lanes; OLED/grid editing, Song root/scale integration, Custom automation WRITE/Undo, exclusive Custom targets and real Tie/Legato/Overlap.
 - Plaits: FM, Waveshaping and Virtual Analog oscillator engines, with mappable engine selection. This is a three-engine subset, not the complete Plaits module.
 - Additional startup, OLED, effects and overload-safety changes.
 
-**Download:** [OLED firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-03556b92.bin) · [Installation instructions](firmware/INSTALL.md) · [Exact source](https://github.com/mileda/DelugeFirmware/tree/03556b92957d4cef776b7940f08cd60d196d0ff9)
+**Download:** [OLED firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-rc2-ad157679.bin) · [Installation instructions](firmware/INSTALL.md) · [Exact source](https://github.com/mileda/DelugeFirmware/tree/ad157679c9a3fa1888183e7a89552e3478c7c988)
 
-**Current status:** experimental ARM Release build available, compiled from source commit `03556b92957d4cef776b7940f08cd60d196d0ff9` with DBT toolchain v22. Host regression tests passed. Physical-device testing has not been performed. This is not a stable official release. See [build details and checksum](firmware/BUILD_INFO.json).
+**Current status:** experimental ARM Release build available, compiled from source commit `ad157679c9a3fa1888183e7a89552e3478c7c988` with DBT toolchain v22. Host regression tests passed. Physical-device testing has not been performed. This is not a stable official release. See [build details and checksum](firmware/BUILD_INFO.json).
 
-Read [new MDD features and usage](docs/custom/MDD_WRITE_TIES_20261012.md), [beta integration and all 15 retained changes](docs/custom/BETA_INTEGRATION_20261012.md), [changes and attribution](CUSTOM_CHANGES.md), [licensing](THIRD_PARTY_NOTICES.md), [build instructions](BUILD_CUSTOM.md), and the [CPU audit](docs/custom/CPU_AUDIT.md).
+Read [RC2 fixes and Plaits optimizations](docs/custom/RC2_INTEGRATION_20261020.md), [new MDD features and usage](docs/custom/MDD_WRITE_TIES_20261012.md), [beta integration and all 15 retained changes](docs/custom/BETA_INTEGRATION_20261012.md), [changes and attribution](CUSTOM_CHANGES.md), [licensing](THIRD_PARTY_NOTICES.md), [build instructions](BUILD_CUSTOM.md), and the [CPU audit](docs/custom/CPU_AUDIT.md).
 
 ## User guide (PDF)
 

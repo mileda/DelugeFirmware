@@ -1,12 +1,12 @@
 # MDD Snake + Plaits — OLED firmware download
 
-Unofficial custom firmware based on Deluge Community Firmware 1.3.0 beta (Derbyshire). This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
+Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC2 (Derbyshire). This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
 
 ## Download
 
-[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-03556b92.bin)
+[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-rc2-ad157679.bin)
 
-[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/03556b92957d4cef776b7940f08cd60d196d0ff9) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/03556b92957d4cef776b7940f08cd60d196d0ff9.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
+[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/ad157679c9a3fa1888183e7a89552e3478c7c988) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/ad157679c9a3fa1888183e7a89552e3478c7c988.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
 
 ## Install
 
@@ -22,7 +22,7 @@ These steps follow the retained [upstream SD-card update guide](../website/src/c
 
 Custom automation WRITE with atomic Undo/Redo, one Custom per destination, true Tie across loop boundaries, Legato and adjustable Overlap are included. See [new features and controls](../docs/custom/MDD_WRITE_TIES_20261012.md).
 
-MDD clip sequencer, four Custom modulation lanes, Plaits FM/Waveshaping/Virtual Analog sources, Plaits optimization, all 15 selected custom changes, the published 12 October beta fixes and upstream Reverb PR #4990. See [integration notes](../docs/custom/BETA_INTEGRATION_20261012.md). See the [modification notice](../CUSTOM_CHANGES.md) and [audit](../docs/custom/CPU_AUDIT.md).
+MDD clip sequencer, four Custom modulation lanes, Plaits FM/Waveshaping/Virtual Analog sources, Plaits optimization, all 15 selected custom changes, the upstream 1.3.0 RC2 fixes and retained reverb additions. See [RC2 integration and optimization notes](../docs/custom/RC2_INTEGRATION_20261020.md). See the [modification notice](../CUSTOM_CHANGES.md) and [audit](../docs/custom/CPU_AUDIT.md).
 
 ## License and authorship
 

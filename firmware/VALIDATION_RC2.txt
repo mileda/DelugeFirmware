@@ -1,0 +1,49 @@
+Source: ad157679c9a3fa1888183e7a89552e3478c7c988
+Hardware tested: no
+
+rc2-mdd-tests.log
+PASS production Custom 1-4 setter: independent source masks, full unipolar endpoints under both default polarities, signed/zero depth and clearing
+PASS production Custom Depth: all four sources, pitch/modulator/delay-rate, half/full/negative/zero, stock curve unchanged
+PASS production MDD SCALE: Song-key quantization toggle, release no double toggle, SHIFT cycle, LEARN/stock routing and SD deferral
+PASS production OLED: full WRITE header scrolls during playback, bounded forward/reverse cycle, stock labels remain still during playback and scroll when stopped
+PASS production Song scale fitting: active MDD dormant rows excluded, Normal and other project clips retained
+PASS actual WRITE: rollback at 38 allocation points including automation nodes, native consequence undo/redo restores notes/row expression/direction and rejects missing action, stock row commit, scale, gates, velocity, empty sequence, preserved transport phase, audio service without user-action reentrancy
+PASS native MDD: encoder writes, routes/rollback, root/scale, foreground pad forwarding, mute/hold/length, lane safety, held controls, stock Shift and mode navigation
+PASS native sync: shared tick deltas in both modes, live mode switch without rewind, start/restart/seek, batched clock ticks and two song tick resolutions
+PASS change-driven grid redraw: idle, next cell and stop
+PASS cleanup and actual grid render: 71680 frames, 7 lanes, 5 shapes, 4 directions, lengths 1-16, shifted/muted playhead and stopped/inactive states
+PASS actual OLED rendering: 48px bounds, root status, native menu hint and discrete Engine values
+PASS: paths, lengths, directions, gestures, mute, hold, random, gate, independent Custom, clip editor state
+PASS clip codec: atomic validation, settings, routes, mute, held and play position
+PASS actual InstrumentClip bridge: note-on/off, gate duration, duplicate tick, Custom output, cleanup, root/scale and deferred selection
+PASS Engine parameter: all manual model/base combinations, Custom endpoints 1/2/3 and bounds
+PASS bake: playback-equivalent notes/gates/velocity, 1280 shape/direction/length/speed combinations, empty loop and allocation failure
+PASS startup: all seven lanes default to actual 1/16 at nine clock resolutions, saved timing roundtrip, legacy native timing and all 15 plain/triplet/dotted speed rebindings and first-activation normalization
+
+rc2-mdd-features-tests.log
+PASS true tie, overlap event ordering, same-pitch cleanup, wrapping WRITE and V1/V2 codec
+PASS real Sound bridge: native written Custom values, no double modulation, MDD live override and cleanup
+PASS native Custom automation range: full knob/grid endpoints, 516 round trips, clamping and stock fallback
+PASS actual WRITE: rollback at 38 allocation points including automation nodes, native consequence undo/redo restores notes/row expression/direction and rejects missing action, stock row commit, scale, gates, velocity, empty sequence, preserved transport phase, audio service without user-action reentrancy
+Envelope 1-3 destination coverage for all four Snake sources PASS: 35136 comparisons
+
+rc2-plaits-tests.log
+PASS model 0: buffers, macro corners, reset determinism, non-silent output
+PASS model 1: buffers, macro corners, reset determinism, non-silent output
+PASS model 2: buffers, macro corners, reset determinism, non-silent output
+PASS 1000 live model switches, finite output and unchanged-model continuity
+PASS A4 pitch: 440.011 Hz; host voice bytes 320
+PASS AUX-null primary output equality, parameter corners, dynamic pitch, guard samples
+PASS RC2: rounding, model hysteresis, deferred output, bounded pool, mixed maps and all 15 speeds
+
+rc2-fx-tests.log
+PASS grain/allocation
+PASS grain/rate
+PASS delay/copy
+PASS hpf/load
+PASS reverb/damping
+PASS reverb/width
+PASS menu/shift
+PASS menu/navigation
+All 8 host regression groups passed; hardware testing is separate.
+
