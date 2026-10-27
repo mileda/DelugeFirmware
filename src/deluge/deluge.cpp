@@ -500,7 +500,8 @@ void setupStartupSong() {
 	}
 	// Loading UI owns popups during startup. Only show the greeting after it
 	// returns, so its dismissal cannot immediately erase the greeting.
-	if (display->haveOLED() && !deluge::hid::display::OLED::isPopupPresent()) {
+	if (display->haveOLED() && runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::BootGreeting)
+	    && !deluge::hid::display::OLED::isPopupPresent()) {
 		deluge::hid::display::OLED::popupText("Holdontoentropy", false, PopupType::GENERAL);
 		uiTimerManager.setTimer(TimerName::DISPLAY, 4000);
 	}

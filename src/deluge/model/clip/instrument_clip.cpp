@@ -67,6 +67,22 @@
 
 namespace params = deluge::modulation::params;
 
+namespace {
+// MDD V1/V2 files stored route targets as numeric patched-param IDs, from before LOCAL_PLAITS_A/B_MORPH were
+// inserted ahead of LOCAL_PAN. Everything from that point moved up by two.
+constexpr int kMddMorphParamsInserted = 2;
+constexpr int kLegacyMddTargetLimit = params::GLOBAL_NONE - kMddMorphParamsInserted;
+void migrateLegacyMddTargets(snake::Controller& mdd) {
+	for (auto& list : mdd.routes) {
+		for (auto& route : list) {
+			if (route.target >= params::LOCAL_PLAITS_A_MORPH) {
+				route.target += kMddMorphParamsInserted;
+			}
+		}
+	}
+}
+} // namespace
+
 // Supplying song is optional, and basically only for the purpose of setting yScroll according to root note
 InstrumentClip::InstrumentClip(Song* song) : Clip(ClipType::INSTRUMENT), noteRows() {
 	if (song)
@@ -173,8 +189,10 @@ Error InstrumentClip::clone(ModelStackWithTimelineCounter* modelStack, bool shou
 	newClip->mdd.core = mdd.core;
 	newClip->mdd.needsInitialSpeed = mdd.needsInitialSpeed;
 	newClip->mdd.routes = mdd.routes;
+	newClip->mdd.midiCC = mdd.midiCC;
 	newClip->mdd.low = mdd.low;
 	newClip->mdd.high = mdd.high;
+	newClip->mddUsed = mddUsed;
 	newClip->mddEnabled = mddEnabled;
 	newClip->mddRequested = mddRequested;
 	newClip->mddPending = mddPending;
@@ -737,19 +755,37 @@ void InstrumentClip::processCurrentPos(ModelStackWithTimelineCounter* modelStack
 		// Keep the live Clip position on a running switch back to Normal.
 		// Restoring the entry position rewinds this clip against the song clock.
 
+		const bool returningToNormal = mddEnabled && !mddRequested;
 		mddEnabled = mddRequested;
 		mddPending = false;
+		if (returningToNormal) {
+			// Stock row counters did not run while MDD played. Re-align rows with their own length to the live clip
+			// position (as at transport start) and process the stock rows on this very tick.
+			for (int32_t i = 0; i < noteRows.getNumElements(); i++) {
+				NoteRow* row = noteRows.getElement(i);
+				if (row->hasIndependentPlayPos() && row->loopLengthIfIndependent > 0) {
+					row->lastProcessedPosIfIndependent = lastProcessedPos % row->loopLengthIfIndependent;
+				}
+			}
+			noteRowsNumTicksBehindClip = 0;
+			ticksTilNextNoteRowEvent = 0;
+		}
 	}
 	if (mddPending) {
-		// Recheck the next native tick, rather than waiting for a distant stock note event.
-		playbackHandler.swungTicksTilNextEvent = std::min<int32_t>(1, playbackHandler.swungTicksTilNextEvent);
+		// Come back exactly on the 1/16 boundary where the switch happens, rather than every tick.
+		playbackHandler.swungTicksTilNextEvent =
+		    std::min<int32_t>(mddTicksUntilSwitch(modelStack->song), playbackHandler.swungTicksTilNextEvent);
 	}
 	if (mddEnabled) {
 		Clip::processCurrentPos(modelStack, ticksSinceLast);
 		if (modelStack->getTimelineCounter() != this)
 			return;
 		processMdd(modelStack);
-		playbackHandler.swungTicksTilNextEvent = std::min<int32_t>(1, playbackHandler.swungTicksTilNextEvent);
+		// Event-driven like the stock rows: the next lane step boundary or note-off, not every tick.
+		int32_t next = mddTicksUntilNextEvent();
+		if (mddPending)
+			next = std::min(next, mddTicksUntilSwitch(modelStack->song));
+		playbackHandler.swungTicksTilNextEvent = std::min<int32_t>(next, playbackHandler.swungTicksTilNextEvent);
 		return;
 	}
 
@@ -967,7 +1003,7 @@ doNewProbability:
 	}
 
 	if (mddPending)
-		ticksTilNextNoteRowEvent = 1;
+		ticksTilNextNoteRowEvent = std::min(ticksTilNextNoteRowEvent, mddTicksUntilSwitch(modelStack->song));
 	if (ticksTilNextNoteRowEvent < playbackHandler.swungTicksTilNextEvent) {
 		playbackHandler.swungTicksTilNextEvent = ticksTilNextNoteRowEvent;
 	}
@@ -2392,12 +2428,32 @@ Error InstrumentClip::setAudioInstrument(Instrument* newInstrument, Song* song, 
 
 void InstrumentClip::writeDataToFile(Serializer& writer, Song* song) {
 
-	auto mddSettings = snake::Codec::encode(mdd, mddRequested, mddTick);
-	writer.writeAttribute("mddSnakeV2", mddSettings.data());
-	writer.writeAttribute("mddBakedCustom", mddBakedCustom);
-	writer.writeAttribute("mddNormalPos", mddNormalPos);
-	writer.writeAttribute("mddNormalRepeat", mddNormalRepeat);
-	writer.writeAttribute("mddNormalReversed", mddNormalReversed);
+	// MDD state is only written once the clip has used it, so ordinary clips keep their stock size.
+	if (mddUsed || mddRequested || mddEnabled || mddBakedCustom) {
+		auto mddSettings = snake::Codec::encode(mdd, mddRequested, mddTick);
+		writer.writeAttribute("mddSnakeV3", mddSettings.data());
+		// Route targets by stable file name, so later param list changes cannot retarget saved maps.
+		char targets[16 * 32];
+		size_t used = 0;
+		targets[0] = 0;
+		for (const auto& list : mdd.routes) {
+			for (const auto& route : list) {
+				const char* name =
+				    route.target >= 0 && route.target < params::GLOBAL_NONE
+				        ? params::paramNameForFile(params::Kind::PATCHED, static_cast<params::ParamType>(route.target))
+				        : "";
+				const int n = snprintf(targets + used, sizeof(targets) - used, "%s%s", used ? "," : "", name);
+				used = std::min(sizeof(targets) - 1, used + std::max(n, 0));
+			}
+		}
+		writer.writeAttribute("mddRouteTargets", targets);
+		if (mddBakedCustom) {
+			writer.writeAttribute("mddBakedCustom", mddBakedCustom);
+		}
+		writer.writeAttribute("mddNormalPos", mddNormalPos);
+		writer.writeAttribute("mddNormalRepeat", mddNormalRepeat);
+		writer.writeAttribute("mddNormalReversed", mddNormalReversed);
+	}
 	writer.writeAttribute("clipName", name.get());
 	writer.writeAttribute("inKeyMode", inScaleMode);
 	writer.writeAttribute("yScroll", yScroll);
@@ -2582,25 +2638,49 @@ someError:
 			continue;
 		}
 		if (!strcmp(tagName, "mddBakedCustom")) {
-			auto value = reader.readTagOrAttributeValueInt();
-			if (value < 0 || value > 15)
-				return Error::FILE_CORRUPTED;
-			mddBakedCustom = value;
+			// Unknown bits are ignored rather than failing the whole song.
+			mddBakedCustom = reader.readTagOrAttributeValueInt() & 15;
 			reader.exitTag();
 			continue;
 		}
-		if (!strcmp(tagName, "mddSnakeV1") || !strcmp(tagName, "mddSnakeV2")) {
-			const bool version2 = !strcmp(tagName, "mddSnakeV2");
+		if (!strcmp(tagName, "mddSnakeV1") || !strcmp(tagName, "mddSnakeV2") || !strcmp(tagName, "mddSnakeV3")) {
+			// V1/V2 stored route targets as numeric param IDs from before the Plaits Morph params existed.
+			const bool legacyIds = strcmp(tagName, "mddSnakeV3") != 0;
 			String settings;
 			auto error = reader.readTagOrAttributeValueString(&settings);
 			if (error != Error::NONE)
 				return error;
-			if (!snake::Codec::decode(settings.get(), mdd, mddEnabled, mddTick, params::GLOBAL_NONE))
-				return Error::FILE_CORRUPTED;
-			mddRequested = mddEnabled;
-			if (mddEnabled)
-				mdd.activateClock(song->getQuarterNoteLength());
-			reader.exitTag(version2 ? "mddSnakeV2" : "mddSnakeV1");
+			const int targetLimit = legacyIds ? kLegacyMddTargetLimit : params::GLOBAL_NONE;
+			if (snake::Codec::decode(settings.get(), mdd, mddEnabled, mddTick, targetLimit)) {
+				mddUsed = true;
+				if (legacyIds) {
+					migrateLegacyMddTargets(mdd);
+				}
+				else {
+					// V3 stores deliberate lane rates; only legacy files rely on first-activation 1/16 normalization.
+					mdd.needsInitialSpeed = false;
+				}
+				mddRequested = mddEnabled;
+				if (mddEnabled)
+					mdd.activateClock(song->getQuarterNoteLength());
+			}
+			else {
+				// Damaged or newer MDD data: keep the song, fall back to Normal with default MDD settings.
+				D_PRINTLN("MDD data unreadable, reset");
+				mdd.resetToDefault(song->getQuarterNoteLength());
+				mddEnabled = mddRequested = false;
+				mddTick = 0;
+			}
+			reader.exitTag(tagName);
+			continue;
+		}
+		if (!strcmp(tagName, "mddRouteTargets")) {
+			String names;
+			auto error = reader.readTagOrAttributeValueString(&names);
+			if (error != Error::NONE)
+				return error;
+			applyMddRouteTargetNames(names.get());
+			reader.exitTag(tagName);
 			continue;
 		}
 
@@ -4877,8 +4957,10 @@ void InstrumentClip::requestMdd(bool enabled) {
 		return;
 	if (output->type != OutputType::SYNTH && output->type != OutputType::MIDI_OUT && output->type != OutputType::CV)
 		return;
-	if (enabled)
+	if (enabled) {
 		mdd.activateClock(currentSong->getQuarterNoteLength());
+		mddUsed = true;
+	}
 	else
 		mdd.syncClock(currentSong->getQuarterNoteLength());
 	mddRequested = enabled;
@@ -4994,6 +5076,7 @@ void InstrumentClip::closeMdd(ModelStackWithTimelineCounter* stack) {
 	else
 		mddHeld = {};
 	mddNoteOn = false;
+	mddLastSentCC.fill(0xFF);
 	if (output && output->type == OutputType::SYNTH) {
 		auto* sound = static_cast<Sound*>(output->toModControllable());
 		if (sound->mddClipOwner == this) {
@@ -5004,7 +5087,7 @@ void InstrumentClip::closeMdd(ModelStackWithTimelineCounter* stack) {
 		}
 	}
 }
-void InstrumentClip::publishMddCustom() {
+void InstrumentClip::publishMddCustom(const snake::Frame* liveFrame) {
 	if (!output || output->type != OutputType::SYNTH || !isActiveOnOutput())
 		return;
 	auto* sound = static_cast<Sound*>(output->toModControllable());
@@ -5015,7 +5098,8 @@ void InstrumentClip::publishMddCustom() {
 	sound->mddBakedSources = mddEnabled ? 0 : mddBakedCustom;
 	std::array<int32_t, 4> values{};
 	if (mddEnabled) {
-		auto frame = mdd.core.advance(mddTick);
+		// Reuse the frame processMdd() already evaluated for this tick.
+		const snake::Frame frame = liveFrame ? *liveFrame : mdd.core.advance(mddTick);
 		for (int i = 0; i < 4; ++i)
 			values[i] = snake::normalizedQ31(frame.custom[i]);
 	}
@@ -5037,7 +5121,21 @@ void InstrumentClip::processMdd(ModelStackWithTimelineCounter* stack) {
 	if (mddLastProcessed == mddTick)
 		frame.trigger = false;
 	mddLastProcessed = mddTick;
-	publishMddCustom();
+	publishMddCustom(&frame);
+	if (output->type == OutputType::MIDI_OUT) {
+		// Custom lanes as MIDI CC: 7-bit value, sent only when it changes.
+		auto* midi = static_cast<MIDIInstrument*>(output);
+		for (int i = 0; i < 4; ++i) {
+			const uint8_t cc = mdd.midiCC[i];
+			if (cc == snake::Controller::kNoMidiCC)
+				continue;
+			const uint8_t value = frame.custom[i] >> 9;
+			if (value != mddLastSentCC[i]) {
+				midi->sendMddCC(cc, value);
+				mddLastSentCC[i] = value;
+			}
+		}
+	}
 	frame.note = mddQuantize(frame.note, stack->song);
 	mddHeld.advance(
 	    frame, mddTick,
@@ -5064,7 +5162,9 @@ bool InstrumentClip::applyMddRoute(ModelStackWithTimelineCounter* stack, int lan
 	auto source = static_cast<PatchSource>(int(PatchSource::SNAKE_CUSTOM_1) + lane);
 	if (route.target >= params::GLOBAL_NONE
 	    || (route.target >= 0
-	        && sound->maySourcePatchToParam(source, route.target, &paramManager) == PatchCableAcceptance::DISALLOWED))
+	        && (sound->mddCustomTargetTaken(source, route.target, &paramManager)
+	            || sound->maySourcePatchToParam(source, route.target, &paramManager)
+	                   == PatchCableAcceptance::DISALLOWED)))
 		return false;
 	auto* model = stack->addOtherTwoThingsButNoNoteRow(sound, &paramManager)
 	                  ->addParamCollectionSummary(paramManager.getPatchCableSetSummary());
@@ -5085,4 +5185,70 @@ bool InstrumentClip::applyMddRoute(ModelStackWithTimelineCounter* stack, int lan
 	if (oldRoute.target != route.target)
 		set(oldRoute.target, 0, false);
 	return true;
+}
+
+void InstrumentClip::applyMddRouteTargetNames(char const* names) {
+	if (!names) {
+		return;
+	}
+	int slot = 0;
+	char const* start = names;
+	while (slot < 16) {
+		char const* end = strchr(start, ',');
+		const size_t length = end ? size_t(end - start) : strlen(start);
+		auto& route = mdd.routes[slot / 4][slot % 4];
+		char name[32];
+		if (length && length < sizeof(name)) {
+			memcpy(name, start, length);
+			name[length] = 0;
+			const auto p = params::fileStringToParam(params::Kind::PATCHED, name, true);
+			route.target = p < params::GLOBAL_NONE ? int(p) : -1;
+		}
+		else {
+			route.target = -1;
+		}
+		++slot;
+		if (!end) {
+			break;
+		}
+		start = end + 1;
+	}
+}
+
+// MDD toggles scale mode without the stock key detection (its dormant rows do not describe what plays).
+// Keep the same bottom note on screen, so the stock grid is not scrolled when the user returns to Normal.
+void InstrumentClip::setScaleModeKeepingScroll(bool scaleMode, Song* song) {
+	if (scaleMode == inScaleMode) {
+		return;
+	}
+	const int32_t bottomNote = getYNoteFromYVisual(yScroll, song);
+	inScaleMode = scaleMode;
+	yScroll = getYVisualFromYNote(bottomNote, song);
+}
+
+// Ticks from mddTick to the next tick where MDD output can change: a step boundary of any of the seven lanes
+// (notes trigger and Custom values only change there) or a pending note-off.
+int32_t InstrumentClip::mddTicksUntilNextEvent() const {
+	const uint64_t tick = mddTick;
+	uint64_t best = INT32_MAX;
+	for (const auto& lane : mdd.core.lanes) {
+		const uint64_t n = std::max<uint32_t>(1, lane.ticks);
+		const uint64_t d = std::max<unsigned>(1, lane.tickDenominator);
+		const uint64_t step = tick * d / n;
+		const uint64_t boundary = ((step + 1) * n + d - 1) / d;
+		best = std::min<uint64_t>(best, boundary > tick ? boundary - tick : 1);
+	}
+	for (const auto& note : mddHeld.notes) {
+		if (note.active) {
+			best = std::min<uint64_t>(best, note.offAt > tick ? note.offAt - tick : 1);
+		}
+	}
+	return static_cast<int32_t>(std::max<uint64_t>(1, best));
+}
+
+// Ticks until the 1/16 boundary on which a requested Normal/MDD switch takes effect.
+int32_t InstrumentClip::mddTicksUntilSwitch(Song* song) const {
+	const int64_t sixteenth = std::max<uint32_t>(1, song->getQuarterNoteLength() / 4);
+	const int64_t phase = playbackHandler.lastSwungTickActioned % sixteenth;
+	return static_cast<int32_t>(phase ? sixteenth - phase : sixteenth);
 }

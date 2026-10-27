@@ -264,18 +264,10 @@ ActionResult InstrumentClipView::commandExitScaleMode() {
 ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) {
 	using namespace deluge::hid::button;
 
-	if (mddControls() && b == SHIFT && on)
+	// BACK keeps its stock meaning (undo / SHIFT+BACK redo) in MDD view; the menu opens with SELECT or the
+	// MDD Snake control pad. Any button cancels a half-finished pad gesture.
+	if (mddControls() && on && (b == SHIFT || b == BACK))
 		getCurrentInstrumentClip()->mdd.back();
-	if (mddControls() && currentUIMode == UI_MODE_NONE && !Buttons::isShiftButtonPressed()) {
-		if (b == BACK && on) {
-			if (inCardRoutine)
-				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
-			getCurrentInstrumentClip()->mdd.back();
-			if (soundEditor.setup(getCurrentClip()))
-				openUI(&soundEditor);
-			return ActionResult::DEALT_WITH;
-		}
-	}
 	maybeStartShortcutOverview(b, on);
 
 	// Scale mode button
@@ -289,11 +281,11 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 			auto* clip = getCurrentInstrumentClip();
 			actionLogger.deleteAllLogs();
 			if (Buttons::isShiftButtonPressed()) {
-				clip->inScaleMode = true;
+				clip->setScaleModeKeepingScroll(true, currentSong);
 				currentSong->cycleThroughScales();
 			}
 			else
-				clip->inScaleMode = !clip->inScaleMode;
+				clip->setScaleModeKeepingScroll(!clip->inScaleMode, currentSong);
 			indicator_leds::setLedState(IndicatorLED::SCALE_MODE, clip->inScaleMode);
 			if (clip->inScaleMode)
 				currentSong->displayCurrentRootNoteAndScaleName();
@@ -924,8 +916,11 @@ ActionResult InstrumentClipView::timerCallback() {
 			ui.gestures.consumed = true;
 			deluge::gui::menu_item::sequence::mdd::open(deluge::gui::menu_item::sequence::mdd::valueMenu);
 		}
-		// Keep long-press detection responsive without redrawing an unchanged grid.
-		uiTimerManager.setTimer(TimerName::UI_SPECIFIC, 20);
+		// Poll only while it matters: a held pad (long-press detection) or a pending Normal/MDD switch.
+		// Pad presses and menu sessions re-arm it; otherwise the view stays idle.
+		auto* clip = getCurrentInstrumentClip();
+		if ((ui.gestures.held >= 0 && !ui.gestures.consumed) || clip->mddPending)
+			uiTimerManager.setTimer(TimerName::UI_SPECIFIC, 20);
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -1931,13 +1926,33 @@ const uint32_t auditionPadActionUIModes[] = {UI_MODE_AUDITIONING,
 
 ActionResult InstrumentClipView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	if (mddControls()) {
+		// Opening menus may touch the SD card; never re-enter from inside a card routine.
+		if (sdRoutineLock) {
+			return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+		}
+		// SHIFT + main pad keeps the stock sound-parameter shortcuts, as it does inside the SoundEditor.
+		// Never fall through to note editing: the stock grid is hidden while MDD is shown.
+		if (Buttons::isShiftButtonPressed() && x >= 0 && x < kDisplayWidth) {
+			if (velocity) {
+				soundEditor.potentialShortcutPadAction(x, y, velocity);
+			}
+			return ActionResult::DEALT_WITH;
+		}
 		auto& ui = getCurrentInstrumentClip()->mdd;
 		uint64_t now = mddTimeMs();
-		if (x >= 0 && x < 4 && y >= 4 && y < 8) {
-			int cell = (7 - y) * 4 + x;
+		if (x >= 0 && x < kDisplayWidth && y >= 4 && y < 8) {
+			// Four 4x4 blocks: Notes, Gates, Velocity, selected Custom. Pressing a block selects its lane.
+			const int block = x / 4;
+			const int laneIndex = block < 3 ? block : 3 + ui.custom;
+			int cell = (7 - y) * 4 + (x % 4);
 			if (velocity) {
-				ui.selectedStep = cell;
-				ui.gestures.down(cell, now);
+				if (laneIndex != ui.lane && ui.gestures.held < 0) {
+					ui.choose(laneIndex);
+				}
+				if (laneIndex == ui.lane) {
+					ui.selectedStep = cell;
+					ui.gestures.down(cell, now);
+				}
 			}
 			else {
 				bool editOnRelease = cell == ui.gestures.held && ui.gestures.editing(now) && !ui.gestures.consumed;
@@ -6478,6 +6493,32 @@ ActionResult InstrumentClipView::verticalEncoderAction(int32_t offset, bool inCa
 		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE; // Allow sometimes.
 	}
 
+	// MDD: the stock grid is hidden, so the vertical encoder transposes the Notes lane (SHIFT: octave).
+	if (mddControls()) {
+		if (inCardRoutine) {
+			return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+		}
+		auto& notes = getCurrentInstrumentClip()->mdd.core.lanes[0];
+		const int32_t step = (offset > 0 ? 1 : -1) * (Buttons::isShiftButtonPressed() ? 12 : 1);
+		int32_t lowest = 127, highest = 0;
+		for (auto v : notes.values) {
+			lowest = std::min<int32_t>(lowest, v);
+			highest = std::max<int32_t>(highest, v);
+		}
+		if (lowest + step < 0 || highest + step > 127) {
+			display->displayPopup("Range limit");
+			return ActionResult::DEALT_WITH;
+		}
+		for (auto& v : notes.values) {
+			v += step;
+		}
+		char popup[24];
+		snprintf(popup, sizeof(popup), "Notes %+d", int(step));
+		display->displayPopup(popup);
+		refreshMdd();
+		return ActionResult::DEALT_WITH;
+	}
+
 	bool inNoteRowEditor = getCurrentUI() == &soundEditor && soundEditor.inNoteRowEditor();
 
 	char modelStackMemory[MODEL_STACK_MAX_SIZE];
@@ -6793,6 +6834,19 @@ ActionResult InstrumentClipView::horizontalEncoderAction(int32_t offset) {
 	uiNeedsRendering(this);
 	if (sdRoutineLock) {
 		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE; // Just be safe - maybe not necessary
+	}
+
+	// MDD: rotate the selected lane (its Shift). The hidden stock clip length or scroll are never changed here,
+	// since WRITE renders exactly one clip loop.
+	if (mddControls()) {
+		auto& ui = getCurrentInstrumentClip()->mdd;
+		auto& lane = ui.core.lanes[ui.lane];
+		lane.shift = static_cast<uint8_t>((lane.shift + (offset > 0 ? 1 : 15)) % 16);
+		char popup[24];
+		snprintf(popup, sizeof(popup), "Shift %d", int(lane.shift));
+		display->displayPopup(popup);
+		refreshMdd();
+		return ActionResult::DEALT_WITH;
 	}
 
 	// If holding down notes
@@ -7466,12 +7520,16 @@ abandonModRegion:
 void InstrumentClipView::graphicsRoutine() {
 	if (currentSong && mddControls()) {
 		auto* clip = getCurrentInstrumentClip();
-		const int cell = clip->mddEnabled && playbackHandler.isEitherClockActive() && currentSong->isClipActive(clip)
-		                     ? clip->mdd.core.lanes[clip->mdd.lane].cell(clip->mddTick)
-		                     : -1;
-		if (cell != mddLastRenderedCell || !mddGridWasRendered)
+		const auto cells = mddPlayheadCells(clip);
+		if (!mddGridWasRendered)
 			uiNeedsRendering(this, 0xFFFFFFFF, 0);
+		else if (cells != mddLastRenderedCells)
+			uiNeedsRendering(this, 0xF0, 0); // Playheads live in the four cell rows only.
 		return;
+	}
+	if (mddGridWasRendered) {
+		// A quantized switch back to Normal just happened: redraw the stock grid once.
+		uiNeedsRendering(this);
 	}
 
 	if (!currentSong) {
@@ -7674,35 +7732,39 @@ bool InstrumentClipView::renderMainPads(uint32_t whichRows, RGB image[][kDisplay
 		auto* clip = getCurrentInstrumentClip();
 		auto& ui = clip->mdd;
 		ui.syncClock(currentSong->getQuarterNoteLength());
-		auto& lane = ui.core.lanes[ui.lane];
-		int active = clip->mddEnabled && playbackHandler.isEitherClockActive() && currentSong->isClipActive(clip)
-		                 ? lane.cell(clip->mddTick)
-		                 : -1;
-		mddLastRenderedCell = active;
+		const auto active = mddPlayheadCells(clip);
+		mddLastRenderedCells = active;
 		PadLEDs::clearTickSquares();
-		const RGB colours[4] = {RGB{.r = 150, .g = 130}, RGB{.g = 60, .b = 150}, RGB{.g = 150}, RGB{.r = 150}};
-		RGB colour = colours[std::min(ui.lane, 3)];
+		// Notes, Gates, Velocity, then one colour per Custom lane.
+		const RGB colours[7] = {RGB{.r = 150, .g = 130}, RGB{.g = 60, .b = 150},  RGB{.g = 150},          RGB{.r = 150},
+		                        RGB{.r = 150, .g = 60},  RGB{.r = 120, .b = 120}, RGB{.g = 120, .b = 120}};
 		for (int y = 0; y < 8; ++y)
 			for (int x = 0; x < 16; ++x) {
 				image[y][x] = RGB{};
 				occupancyMask[y][x] = 0;
 			}
-		for (int i = 0; i < 16; ++i) {
-			int x = i % 4, y = 7 - i / 4;
-			auto c = colour;
-			if (lane.muted & (1u << i)) {
-				c.r /= 20;
-				c.g /= 20;
-				c.b /= 20;
+		for (int block = 0; block < 4; ++block) {
+			const int laneIndex = block < 3 ? block : 3 + ui.custom;
+			const auto& lane = ui.core.lanes[laneIndex];
+			const bool selected = laneIndex == ui.lane;
+			const uint16_t used = lane.usedCells();
+			for (int i = 0; i < 16; ++i) {
+				const int x = block * 4 + i % 4, y = 7 - i / 4;
+				RGB c = colours[laneIndex];
+				if (!selected) {
+					c = RGB{.r = uint8_t(c.r / 3), .g = uint8_t(c.g / 3), .b = uint8_t(c.b / 3)};
+				}
+				if (!(used & (1u << i)) || (lane.muted & (1u << i))) {
+					c = RGB{.r = uint8_t(c.r / 12), .g = uint8_t(c.g / 12), .b = uint8_t(c.b / 12)};
+				}
+				if (i == active[block])
+					c = RGB::monochrome((lane.muted & (1u << i)) ? 32 : selected ? 220 : 120);
+				image[y][x] = c;
+				occupancyMask[y][x] = 64;
 			}
-			if (clip->mddEnabled && playbackHandler.isEitherClockActive() && currentSong->isClipActive(clip)
-			    && i == active)
-				c = RGB::monochrome(lane.muted & (1u << i) ? 32 : 220);
-			image[y][x] = c;
-			occupancyMask[y][x] = 64;
 		}
 		for (int x = 0; x < int(snake::controlPads.size()); ++x) {
-			image[3][x] = x < 4 ? colours[x] : RGB{.r = 60, .g = 20, .b = 100};
+			image[3][x] = x < 3 ? colours[x] : x == 3 ? colours[3 + ui.custom] : RGB{.r = 60, .g = 20, .b = 100};
 			occupancyMask[3][x] = 64;
 		}
 		return true;
@@ -8542,6 +8604,18 @@ void InstrumentClipView::blinkSelectedNoteRow(int32_t whichMainRows) {
 	noteRowFlashOn = !noteRowFlashOn;
 	uiNeedsRendering(getRootUI(), whichMainRows, 0xFFFFFFFF);
 	uiTimerManager.setTimer(TimerName::NOTE_ROW_BLINK, 180);
+}
+
+std::array<int, 4> InstrumentClipView::mddPlayheadCells(InstrumentClip* clip) const {
+	std::array<int, 4> cells{-1, -1, -1, -1};
+	if (!clip->mddEnabled || !playbackHandler.isEitherClockActive() || !currentSong->isClipActive(clip)) {
+		return cells;
+	}
+	for (int block = 0; block < 4; ++block) {
+		const int laneIndex = block < 3 ? block : 3 + clip->mdd.custom;
+		cells[block] = clip->mdd.core.lanes[laneIndex].cell(clip->mddTick);
+	}
+	return cells;
 }
 
 bool InstrumentClipView::mddControls() const {

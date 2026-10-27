@@ -2423,12 +2423,12 @@ dontUseCache: {}
 			const float timbre =
 			    std::clamp(0.5f + paramFinalValues[params::LOCAL_OSC_A_PHASE_WIDTH + s] / 2147483648.f, 0.f, 1.f);
 			const float morph =
-			    std::clamp(paramFinalValues[params::LOCAL_CARRIER_0_FEEDBACK + s] / 11863284.f, 0.f, 1.f);
+			    std::clamp(0.5f + paramFinalValues[params::LOCAL_PLAITS_A_MORPH + s] / 2147483648.f, 0.f, 1.f);
 			int32_t amplitudeNow = sourceAmplitude;
 			for (int offset = 0; offset < numSamples;) {
 				float block[plaits::kMaxBlockSize];
 				const int n = std::min<int>(plaits::kMaxBlockSize, numSamples - offset);
-				engine->render(phaseIncrement, harmonics, timbre, morph, block, n);
+				engine->render(phaseIncrement, harmonics, timbre, morph, block, n, sound.plaitsEco);
 				for (int i = 0; i < n; ++i) {
 					amplitudeNow += amplitudeIncrement;
 					// Q25 * amplitude / 2^32 * 64 gives peak amplitude/2, matching stock sine.

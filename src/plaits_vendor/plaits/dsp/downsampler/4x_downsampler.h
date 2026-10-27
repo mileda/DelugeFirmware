@@ -66,6 +66,38 @@ class Downsampler {
   DISALLOW_COPY_AND_ASSIGN(Downsampler);
 };
 
+// Deluge modification: 2x counterpart for the FM engine's Eco mode. Same head/tail polyphase
+// structure with a 4-tap [1 3 3 1] / 8 low-pass (-9 dB at a quarter of the oversampled rate).
+class Downsampler2x {
+ public:
+  Downsampler2x(float* state) {
+    head_ = *state;
+    tail_ = 0.0f;
+    state_ = state;
+  }
+  ~Downsampler2x() {
+    *state_ = head_;
+  }
+  inline void Accumulate(int i, float sample) {
+    static constexpr float fir[2] = { 0.125f, 0.375f };
+    head_ += sample * fir[1 - (i & 1)];
+    tail_ += sample * fir[i & 1];
+  }
+
+  inline float Read() {
+    float value = head_;
+    head_ = tail_;
+    tail_ = 0.0f;
+    return value;
+  }
+ private:
+  float head_;
+  float tail_;
+  float* state_;
+
+  DISALLOW_COPY_AND_ASSIGN(Downsampler2x);
+};
+
 }  // namespace plaits
 
 #endif  // PLAITS_DSP_DOWNSAMPLER_4X_DOWNSAMPLER_H_

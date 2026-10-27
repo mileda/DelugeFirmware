@@ -243,7 +243,8 @@ public:
 	void refreshMdd();
 	bool mddControls() const;
 	bool mddGridWasRendered = false;
-	int mddLastRenderedCell = -1;
+	std::array<int, 4> mddLastRenderedCells{-1, -1, -1, -1};
+	std::array<int, 4> mddPlayheadCells(InstrumentClip* clip) const;
 	CopiedParamAutomation copiedParamAutomation{};
 	// Sometimes the user will want to hold an audition pad without actually sounding the note, by holding an encoder
 	bool auditioningSilently{};

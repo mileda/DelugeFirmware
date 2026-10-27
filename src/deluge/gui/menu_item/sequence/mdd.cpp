@@ -32,6 +32,12 @@ static snake::Controller& state() {
 static snake::Lane& lane() {
 	return state().core.lanes[state().lane];
 }
+// Custom lane index for Map/Depth/Target. Falls back to the last selected Custom
+// so a non-Custom lane can never index outside routes[].
+static int customIndex() {
+	auto& s = state();
+	return s.lane >= 3 ? std::clamp(s.lane - 3, 0, 3) : std::clamp(s.custom, 0, 3);
+}
 static void changed() {
 	uiNeedsRendering(&instrumentClipView);
 }
@@ -162,7 +168,7 @@ public:
 			setValue(snake::percent(s.core.overlap));
 			break;
 		case Depth:
-			setValue(snake::depthPercent(s.routes[s.lane - 3][s.routeSlot].depth));
+			setValue(snake::depthPercent(s.routes[customIndex()][s.routeSlot].depth));
 			break;
 		}
 	}
@@ -206,11 +212,11 @@ public:
 			s.core.overlap = snake::fromPercent(v);
 			break;
 		case Depth: {
-			auto& route = s.routes[s.lane - 3][s.routeSlot];
+			auto& route = s.routes[customIndex()][s.routeSlot];
 			auto previous = route;
 			route.depth = v * 32767 / 100;
 			char memory[MODEL_STACK_MAX_SIZE];
-			if (!clip()->applyMddRoute(currentSong->setupModelStackWithCurrentClip(memory), s.lane - 3, previous,
+			if (!clip()->applyMddRoute(currentSong->setupModelStackWithCurrentClip(memory), customIndex(), previous,
 			                           route)) {
 				route = previous;
 				readCurrentValue();
@@ -228,7 +234,7 @@ private:
 };
 class Choice final : public Selection {
 public:
-	enum Field { Lane, Custom, Direction, Speed, Shape, Root, Scale, Target };
+	enum Field { Lane, Custom, Direction, Speed, Shape, Root, Scale, Target, MidiCC };
 	Choice(Field field, std::string_view label) : field_(field), label_(label) {}
 	std::string_view getName() const override { return label_; }
 	std::string_view getTitle() const override { return label_; }
@@ -246,12 +252,13 @@ public:
 			return false;
 		for (int owner = 0; owner < 4; ++owner)
 			for (int i = 0; i < 4; ++i)
-				if ((owner != s.lane - 3 || i != s.routeSlot) && s.routes[owner][i].target == target)
+				if ((owner != customIndex() || i != s.routeSlot) && s.routes[owner][i].target == target)
 					return false;
 		auto* sound = static_cast<Sound*>(clip()->output->toModControllable());
-		return sound->maySourcePatchToParam(static_cast<PatchSource>(int(PatchSource::SNAKE_CUSTOM_1) + s.lane - 3),
-		                                    target, &clip()->paramManager)
-		       != PatchCableAcceptance::DISALLOWED;
+		const auto source = static_cast<PatchSource>(int(PatchSource::SNAKE_CUSTOM_1) + customIndex());
+		return !sound->mddCustomTargetTaken(source, target, &clip()->paramManager)
+		       && sound->maySourcePatchToParam(source, target, &clip()->paramManager)
+		              != PatchCableAcceptance::DISALLOWED;
 	}
 	int targetAt(int index) {
 		if (index == 0)
@@ -300,11 +307,24 @@ public:
 				options.push_back(getScaleName(static_cast<::Scale>(i)));
 			return options;
 		}
+		case MidiCC: {
+			// "Off", then CC 0..119 (120+ are channel mode messages).
+			static char names[120][8];
+			if (!names[0][0])
+				for (int cc = 0; cc < 120; ++cc)
+					snprintf(names[cc], sizeof(names[cc]), "CC %d", cc);
+			deluge::vector<std::string_view> options{"Off"};
+			for (auto& name : names)
+				options.push_back(name);
+			return options;
+		}
 		case Target: {
 			deluge::vector<std::string_view> options{"None"};
 			for (int p = 0; p < modulation::params::GLOBAL_NONE; ++p)
 				if (allowed(p))
-					options.push_back(modulation::params::getParamDisplayName(modulation::params::Kind::PATCHED, p));
+					options.push_back(modulation::params::getParamDisplayName(
+					    modulation::params::Kind::PATCHED, p,
+					    static_cast<ModControllableAudio*>(clip()->output->toModControllable())));
 			return options;
 		}
 		}
@@ -351,8 +371,13 @@ public:
 		case Scale:
 			setValue(std::min<int>(currentSong->getCurrentScale(), USER_SCALE));
 			break;
+		case MidiCC: {
+			const uint8_t cc = s.midiCC[customIndex()];
+			setValue(cc == snake::Controller::kNoMidiCC ? 0 : cc + 1);
+			break;
+		}
 		case Target: {
-			int target = s.routes[s.lane - 3][s.routeSlot].target, index = 0;
+			int target = s.routes[customIndex()][s.routeSlot].target, index = 0;
 			for (int p = 0; p <= target; ++p)
 				if (allowed(p))
 					++index;
@@ -388,7 +413,7 @@ public:
 			// Use the Song's native key transposition: retain the selected scale,
 			// move scale-mode clips together, and preserve the root's octave.
 			currentSong->transposeAllScaleModeClips(v - mod(currentSong->key.rootNote, 12));
-			clip()->inScaleMode = true;
+			clip()->setScaleModeKeepingScroll(true, currentSong);
 			break;
 		case Scale:
 			if (currentSong->setScale(static_cast<::Scale>(v)) != static_cast<::Scale>(v)) {
@@ -396,15 +421,19 @@ public:
 				display->displayPopup("Scale cannot fit notes");
 			}
 			else {
-				clip()->inScaleMode = true;
+				clip()->setScaleModeKeepingScroll(true, currentSong);
 			}
 			break;
+		case MidiCC:
+			s.midiCC[customIndex()] = v == 0 ? snake::Controller::kNoMidiCC : uint8_t(v - 1);
+			clip()->mddLastSentCC[customIndex()] = 0xFF; // Send the current value on the next step.
+			break;
 		case Target: {
-			auto& route = s.routes[s.lane - 3][s.routeSlot];
+			auto& route = s.routes[customIndex()][s.routeSlot];
 			auto previous = route;
 			route.target = targetAt(v);
 			char memory[MODEL_STACK_MAX_SIZE];
-			if (!clip()->applyMddRoute(currentSong->setupModelStackWithCurrentClip(memory), s.lane - 3, previous,
+			if (!clip()->applyMddRoute(currentSong->setupModelStackWithCurrentClip(memory), customIndex(), previous,
 			                           route)) {
 				route = previous;
 				readCurrentValue();
@@ -413,7 +442,7 @@ public:
 			if (route.target >= 0
 			    && static_cast<Sound*>(clip()->output->toModControllable())
 			               ->maySourcePatchToParam(
-			                   static_cast<PatchSource>(int(PatchSource::SNAKE_CUSTOM_1) + s.lane - 3), route.target,
+			                   static_cast<PatchSource>(int(PatchSource::SNAKE_CUSTOM_1) + customIndex()), route.target,
 			                   &clip()->paramManager)
 			           != PatchCableAcceptance::ALLOWED)
 				display->displayPopup("Target inactive");
@@ -536,8 +565,8 @@ public:
 static WriteConfirmation writeConfirmation;
 static Choice laneMenu{Choice::Lane, "Lane"}, customMenu{Choice::Custom, "Custom"},
     directionMenu{Choice::Direction, "Direction"}, speedMenu{Choice::Speed, "Speed"},
-    shapeMenu{Choice::Shape, "Snake Shape"}, rootMenu{Choice::Root, "Root"}, scaleMenu{Choice::Scale, "Scale"},
-    targetMenu{Choice::Target, "Target"};
+    shapeMenu{Choice::Shape, "Snake Shape"}, rootMenu{Choice::Root, "Song Root"},
+    scaleMenu{Choice::Scale, "Song Scale"}, targetMenu{Choice::Target, "Target"}, midiCCMenu{Choice::MidiCC, "MIDI CC"};
 static Number stepsMenu{Number::Steps, "Steps"}, shiftMenu{Number::Shift, "Shift"}, stepMenu{Number::Step, "Step"},
     stepValueMenu{Number::Value, "Step Value"}, minimumMenu{Number::Minimum, "Minimum"},
     maximumMenu{Number::Maximum, "Maximum"}, slotMenu{Number::Slot, "Slot"}, depthMenu{Number::Depth, "Depth"},
@@ -545,12 +574,14 @@ static Number stepsMenu{Number::Steps, "Steps"}, shiftMenu{Number::Shift, "Shift
 static Action randomMenu{snake::Control::Random, "Random"}, resetMenu{snake::Control::Reset, "Reset"},
     randomAllMenu{snake::Control::RandomAll, "Random All"}, resetAllMenu{snake::Control::ResetAll, "Reset All"};
 static Menu mapMenu{"Map", {&slotMenu, &targetMenu, &depthMenu, &customMenu}, true};
+static Menu midiMapMenu{"Map to MIDI CC", {&customMenu, &midiCCMenu}};
 static Menu rangeMenu{"Range", {&minimumMenu, &maximumMenu, &stepsMenu, &shiftMenu}};
 static Menu valuesMenu{"MDD Values", {&stepMenu, &stepValueMenu, &stepsMenu, &shiftMenu}};
 static Menu gateValuesMenu{"MDD Gates",
                            {&stepMenu, &stepValueMenu, &stepsMenu, &shiftMenu, &tieMenu, &overlapMenu, &legatoMenu}};
 static Menu customValuesMenu{"MDD Custom", {&customMenu, &stepMenu, &stepValueMenu, &stepsMenu}};
-static Menu keyMenu{"Root / Scale", {&rootMenu, &scaleMenu}};
+// Root and Scale are the Song key, shared with every scale-mode clip; the title says so.
+static Menu keyMenu{"Song Key", {&rootMenu, &scaleMenu}};
 static Menu randomPage{"Random", {&randomMenu, &randomAllMenu, &minimumMenu, &maximumMenu}};
 static Menu resetPage{"Reset", {&resetMenu, &resetAllMenu, &stepsMenu, &shiftMenu}};
 static Menu rootSettings{"MDD Snake",
@@ -607,13 +638,13 @@ MenuItem* automationMenu = &writtenMenu;
 MenuItem* settingsMenu = &rootSettings;
 MenuItem* valueMenu = &valuesMenu;
 bool owns(MenuItem* item) {
-	MenuItem* items[] = {&sequencerModeMenu, &rootSettings,  &laneMenu,      &customMenu,       &stepMenu,
-	                     &stepValueMenu,     &directionMenu, &speedMenu,     &stepsMenu,        &shiftMenu,
-	                     &shapeMenu,         &rootMenu,      &scaleMenu,     &mapMenu,          &rangeMenu,
-	                     &minimumMenu,       &maximumMenu,   &slotMenu,      &targetMenu,       &depthMenu,
-	                     &randomMenu,        &resetMenu,     &randomAllMenu, &resetAllMenu,     &valuesMenu,
-	                     &gateValuesMenu,    &tieMenu,       &overlapMenu,   &legatoMenu,       &customValuesMenu,
-	                     &keyMenu,           &randomPage,    &resetPage,     &writeConfirmation};
+	MenuItem* items[] = {
+	    &sequencerModeMenu, &rootSettings,   &laneMenu,   &customMenu,        &stepMenu,      &stepValueMenu,
+	    &directionMenu,     &speedMenu,      &stepsMenu,  &shiftMenu,         &shapeMenu,     &rootMenu,
+	    &scaleMenu,         &mapMenu,        &rangeMenu,  &minimumMenu,       &maximumMenu,   &slotMenu,
+	    &targetMenu,        &depthMenu,      &randomMenu, &resetMenu,         &randomAllMenu, &resetAllMenu,
+	    &valuesMenu,        &gateValuesMenu, &tieMenu,    &overlapMenu,       &legatoMenu,    &customValuesMenu,
+	    &keyMenu,           &randomPage,     &resetPage,  &writeConfirmation, &midiMapMenu,   &midiCCMenu};
 	return std::find(std::begin(items), std::end(items), item) != std::end(items);
 }
 void open(MenuItem* item) {
@@ -688,10 +719,17 @@ void control(snake::Control c) {
 		keyMenu.focusChild(&scaleMenu);
 		break;
 	case snake::Control::Map:
-		if (state().lane >= 3 && getCurrentOutputType() == OutputType::SYNTH)
+		if (getCurrentOutputType() == OutputType::MIDI_OUT) {
+			// MIDI clips send Custom lanes as CC; pick the lane with Custom, then the CC.
+			if (state().lane < 3)
+				state().choose(state().custom + 3);
+			open(&midiMapMenu);
+			midiMapMenu.focusChild(&midiCCMenu);
+		}
+		else if (state().lane >= 3 && getCurrentOutputType() == OutputType::SYNTH)
 			open(&mapMenu);
 		else
-			display->displayPopup(getCurrentOutputType() != OutputType::SYNTH ? "Map needs Synth"
+			display->displayPopup(getCurrentOutputType() != OutputType::SYNTH ? "Map needs Synth or MIDI"
 			                                                                  : "Select Custom first");
 		break;
 	case snake::Control::Settings:

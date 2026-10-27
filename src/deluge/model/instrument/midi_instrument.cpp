@@ -1399,3 +1399,7 @@ void MIDIInstrument::setNameForCC(int32_t cc, std::string_view name) {
 		labels[cc] = name;
 	}
 }
+
+void MIDIInstrument::sendMddCC(uint8_t cc, uint8_t value) {
+	midiEngine.sendCC(this, getOutputMasterChannel(), cc, value, getChannel());
+}

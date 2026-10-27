@@ -40,6 +40,13 @@ for i in range(2):
             name="STRING_FOR_TYPE",
         ),
         Menu(
+            "osc::PlaitsQuality",
+            f"plaits{i}QualityMenu",
+            [f"{i}"],
+            "oscillator/plaits_quality.md",
+            name="STRING_FOR_TYPE",
+        ),
+        Menu(
             "FileSelector",
             f"deluge::gui::menu_item::file{i}SelectorMenu",
             ["{name}", f"{i}"],
@@ -71,6 +78,15 @@ for i in range(2):
             name="STRING_FOR_PULSE_WIDTH",
             title="STRING_FOR_OSC_P_WIDTH_MENU_TITLE",
             available_when="Voice is in subtractive or ring-mod mode and oscillator is not in a sample or input monitoring mode",
+        ),
+        Menu(
+            "osc::source::PlaitsMorph",
+            f"source{i}PlaitsMorphMenu",
+            ["{name}", "{title}", "params::LOCAL_PLAITS_A_MORPH", f"{i}"],
+            "oscillator/plaits_morph.md",
+            name="STRING_FOR_FEEDBACK",
+            title="STRING_FOR_CARRIER_FEED_MENU_TITLE",
+            available_when="Oscillator type is Plaits",
         ),
         Menu(
             "osc::source::Feedback",

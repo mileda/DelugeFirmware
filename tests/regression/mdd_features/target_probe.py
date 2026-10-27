@@ -59,9 +59,11 @@ struct Sound {
  bool isSourceActiveEverDisregardingMissingSample(int,ParamManager*) { return active; }
  bool isSourceActiveEver(int,ParamManager*) { return active; }
  PatchCableAcceptance maySourcePatchToParam(PatchSource,uint8_t,ParamManager*);
+ bool mddCustomTargetTaken(PatchSource,uint8_t,ParamManager*);
 };
 """
 code += extract(sound, "PatchCableAcceptance Sound::maySourcePatchToParam") + "\n"
+code += extract(sound, "bool Sound::mddCustomTargetTaken") + "\n"
 code += """int main() {
  Sound sound; ParamManager manager; unsigned checks=0;
  for (auto mode : {SynthMode::SUBTRACTIVE,SynthMode::FM,SynthMode::RINGMOD})
@@ -90,10 +92,21 @@ code += """int main() {
  manager.cables.patchCables[0].from=PatchSource::SNAKE_CUSTOM_2;
  manager.cables.patchCables[0].destinationParamDescriptor.p=params::LOCAL_LPF_FREQ;
  manager.cables.patchCables[0].param.amount=123;
- for(auto source:{PatchSource::SNAKE_CUSTOM_1,PatchSource::SNAKE_CUSTOM_3,PatchSource::SNAKE_CUSTOM_4})
-   assert(sound.maySourcePatchToParam(source,params::LOCAL_LPF_FREQ,&manager)==PatchCableAcceptance::DISALLOWED);
+  // Exclusivity is a UI rule: the DSP acceptance (also used by setupPatching) keeps existing cables usable.
+ for(auto source:{PatchSource::SNAKE_CUSTOM_1,PatchSource::SNAKE_CUSTOM_3,PatchSource::SNAKE_CUSTOM_4}){
+   assert(sound.mddCustomTargetTaken(source,params::LOCAL_LPF_FREQ,&manager));
+   assert(sound.maySourcePatchToParam(source,params::LOCAL_LPF_FREQ,&manager)==PatchCableAcceptance::ALLOWED);}
+ assert(!sound.mddCustomTargetTaken(PatchSource::SNAKE_CUSTOM_2,params::LOCAL_LPF_FREQ,&manager));
+ assert(!sound.mddCustomTargetTaken(PatchSource::ENVELOPE_0,params::LOCAL_LPF_FREQ,&manager));
+ manager.cables.patchCables[0].param.amount=0;assert(!sound.mddCustomTargetTaken(PatchSource::SNAKE_CUSTOM_1,params::LOCAL_LPF_FREQ,&manager));
+ // Plaits Morph: patchable only while that oscillator is Plaits in subtractive mode; carrier feedback is FM-only again.
+ for(auto& source:sound.sources)source.oscType=OscType::PLAITS_FM;
+ assert(sound.maySourcePatchToParam(PatchSource::ENVELOPE_1,params::LOCAL_PLAITS_A_MORPH,&manager)==PatchCableAcceptance::ALLOWED);
+ assert(sound.maySourcePatchToParam(PatchSource::ENVELOPE_1,params::LOCAL_CARRIER_0_FEEDBACK,&manager)==PatchCableAcceptance::DISALLOWED);
+ sound.sources[1].oscType=OscType::SQUARE;
+ assert(sound.maySourcePatchToParam(PatchSource::ENVELOPE_1,params::LOCAL_PLAITS_B_MORPH,&manager)==PatchCableAcceptance::EDITABLE);
  manager.cables.numPatchCables=0;
- std::cout << "Envelope 1-3 destination coverage for all four Snake sources PASS: " << checks << " comparisons\\n";
+ std::cout << "Envelope 1-3 destination coverage for all four MDD Custom sources, UI-only exclusivity and Plaits Morph acceptance PASS: " << checks << " comparisons\\n";
 }"""
 with tempfile.TemporaryDirectory() as tmp:
     src = Path(tmp) / "probe.cpp"

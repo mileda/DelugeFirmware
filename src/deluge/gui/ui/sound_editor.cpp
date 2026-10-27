@@ -275,7 +275,7 @@ bool SoundEditor::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth +
 				}
 				if (edits_range) {
 					// Match PatchCableStrength::checkPermissionToBeginSession for cable ranges.
-					return source < kFirstLocalSource || param < params::FIRST_GLOBAL;
+					return isGlobalPatchSource(source) || param < params::FIRST_GLOBAL;
 				}
 				auto can_patch = [&](uint8_t destination) {
 					return currentSound->maySourcePatchToParam(source, destination, currentParamManager)

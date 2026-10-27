@@ -22,7 +22,7 @@ src = (
 enum class ActionResult{DEALT_WITH,REMIND_ME_OUTSIDE_CARD_ROUTINE,NOT_DEALT_WITH};
 constexpr int UI_MODE_NONE=0,LEARN=1;int currentUIMode=0;
 struct Buttons{static inline bool shift=false,learn=false;static bool isButtonPressed(int){return learn;}static bool isShiftButtonPressed(){return shift;}};
-struct Clip{bool inScaleMode=false;}clip;
+struct Song;struct Clip{bool inScaleMode=false;void setScaleModeKeepingScroll(bool b,Song*){inScaleMode=b;}}clip;
 struct Song{int root=2,scale=0;int displays=0;void cycleThroughScales(){++scale;}void displayCurrentRootNoteAndScaleName(){++displays;}}song,*currentSong=&song;
 struct Logger{void deleteAllLogs(){}}actionLogger;
 enum class IndicatorLED{SCALE_MODE};namespace indicator_leds{bool led=false;void setLedState(IndicatorLED,bool b){led=b;}}

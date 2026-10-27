@@ -295,6 +295,11 @@ bool SourceSelection::sourceIsAllowed(PatchSource source) {
 
 	int32_t p = destinationDescriptor.getJustTheParam();
 
+	// MDD Custom sources are exclusive per destination (a UI rule, not a DSP restriction).
+	if (soundEditor.currentSound->mddCustomTargetTaken(source, p, soundEditor.currentParamManager)) {
+		return false;
+	}
+
 	// Check that this source is allowed to be patched to the selected param
 	if (p == deluge::modulation::params::GLOBAL_VOLUME_POST_FX) {
 		return (

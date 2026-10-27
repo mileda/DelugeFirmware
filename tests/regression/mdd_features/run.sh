@@ -6,4 +6,4 @@ ASAN_OPTIONS=detect_leaks=0 /tmp/mdd-features-tie-overlap
 python3 tests/regression/mdd_features/baked_source_probe.py
 python3 tests/regression/mdd_features/automation_range_probe.py
 python3 tests/regression/mdd/write_probe.py
-python3 tests/regression/snake/target_probe.py
+python3 tests/regression/mdd_features/target_probe.py

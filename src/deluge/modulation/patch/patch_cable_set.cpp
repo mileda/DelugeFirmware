@@ -154,6 +154,23 @@ void PatchCableSet::setupPatching(ModelStackWithParamCollection const* modelStac
 		}
 	}
 
+	// Older presets patched Plaits Morph through carrier feedback, which a subtractive sound cannot use.
+	// Retarget those cables (and range cables on them) to the dedicated Morph param.
+	{
+		auto* sound = static_cast<Sound*>(modelStack->modControllable);
+		if (sound->getSynthMode() == SynthMode::SUBTRACTIVE) {
+			for (int32_t c = 0; c < numPatchCables; c++) {
+				auto& descriptor = patchCables[c].destinationParamDescriptor;
+				for (int32_t osc = 0; osc < kNumSources; osc++) {
+					if (isPlaits(sound->sources[osc].oscType)
+					    && descriptor.getJustTheParam() == params::LOCAL_CARRIER_0_FEEDBACK + osc) {
+						descriptor.changeParam(params::LOCAL_PLAITS_A_MORPH + osc);
+					}
+				}
+			}
+		}
+	}
+
 	int32_t numPotentiallyUsablePatchCables = numPatchCables;
 
 	// Reorder patch cables so the usable ones are first. Look at each one in turn...

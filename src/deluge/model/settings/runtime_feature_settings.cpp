@@ -208,6 +208,10 @@ void RuntimeFeatureSettings::init() {
 	// Shortcut Overlay
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::ShortcutOverlay],
 	                  STRING_FOR_COMMUNITY_FEATURE_SHORTCUT_OVERLAY, "shortcutOverlay", RuntimeFeatureStateToggle::On);
+
+	// Boot greeting (custom firmware)
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::BootGreeting], STRING_FOR_COMMUNITY_FEATURE_BOOT_GREETING,
+	                  "bootGreeting", RuntimeFeatureStateToggle::On);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

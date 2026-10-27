@@ -14,12 +14,20 @@ struct Lane {
 	Shape shape = Shape::Rows;
 	uint16_t held = 0;
 	uint8_t tickDenominator = 1;
+	static constexpr uint8_t paths[5][16] = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	                                         {0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15},
+	                                         {0, 1, 2, 3, 7, 6, 5, 4, 8, 9, 10, 11, 15, 14, 13, 12},
+	                                         {0, 4, 8, 12, 13, 9, 5, 1, 2, 6, 10, 14, 15, 11, 7, 3},
+	                                         {0, 1, 2, 3, 7, 11, 15, 14, 13, 12, 8, 4, 5, 6, 10, 9}};
+	// Bit per grid cell the lane can reach with its current length, shift and shape.
+	uint16_t usedCells() const {
+		uint16_t mask = 0;
+		const int n = std::clamp<int>(length, 1, 16);
+		for (int p = 0; p < n; ++p)
+			mask |= 1u << paths[std::clamp<int>(int(shape), 0, 4)][(p + shift) % 16];
+		return mask;
+	}
 	uint8_t cell(uint64_t tick) const {
-		static constexpr uint8_t paths[5][16] = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		                                         {0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15},
-		                                         {0, 1, 2, 3, 7, 6, 5, 4, 8, 9, 10, 11, 15, 14, 13, 12},
-		                                         {0, 4, 8, 12, 13, 9, 5, 1, 2, 6, 10, 14, 15, 11, 7, 3},
-		                                         {0, 1, 2, 3, 7, 11, 15, 14, 13, 12, 8, 4, 5, 6, 10, 9}};
 		auto n = std::clamp<int>(length, 1, 16);
 		auto k = tick * std::max<unsigned>(tickDenominator, 1) / std::max<uint32_t>(ticks, 1);
 		uint64_t p = k % n;

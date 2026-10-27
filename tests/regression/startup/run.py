@@ -17,7 +17,8 @@ enum class StartupSongMode {BLANK,TEMPLATE,LASTOPENED,LASTSAVED};
 enum class PopupType {GENERAL}; enum class TimerName {DISPLAY};
 int now=0,expiry=0,greetings=0,loaded=0;bool popup=false,loadError=false,openOk=true,canary=false,writeOk=true;
 namespace FlashStorage {StartupSongMode defaultStartupSongMode;}
-struct Settings {const char* getStartupSong(){return "SONGS/TEST.XML";}} runtimeFeatureSettings;
+enum RuntimeFeatureSettingType {BootGreeting};bool greetingOn=true;
+struct Settings {const char* getStartupSong(){return "SONGS/TEST.XML";}bool isOn(RuntimeFeatureSettingType){return greetingOn;}} runtimeFeatureSettings;
 struct String {string value;void concatenate(const char* p){value+=p;}const char* get(){return value.c_str();}};
 void replace_char(char* out,const char* in,char from,char to){strcpy(out,in);for(;*out;out++)if(*out==from)*out=to;}
 namespace StorageManager {bool fileExists(const char* p){return strstr(p,"__STARTUP_OFF_CHECK_")?canary:true;}}
@@ -43,7 +44,8 @@ int main(){
  reset();canary=true;setupStartupSong();assert(greetings==0);
  reset();writeOk=false;setupStartupSong();assert(greetings==0);
  reset();device.oled=false;setupStartupSong();assert(greetings==0);
- std::cout<<"PASS startup: four-second greeting after slow load / blank startup; load errors, canary, open/write failure and 7-segment guards\n";
+ reset();greetingOn=false;setupStartupSong();assert(greetings==0&&!popup);greetingOn=true;
+ std::cout<<"PASS startup: four-second greeting after slow load / blank startup; load errors, canary, open/write failure, 7-segment guards and Boot Greeting setting off\n";
 }
 """
 with tempfile.TemporaryDirectory() as d:

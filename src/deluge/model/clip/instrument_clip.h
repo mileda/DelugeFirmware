@@ -54,8 +54,10 @@ public:
 	snake::Controller mdd;
 	snake::HeldNotes mddHeld;
 	uint8_t mddBakedCustom = 0;
-	void publishMddCustom();
+	void publishMddCustom(const snake::Frame* liveFrame = nullptr);
 	bool mddEnabled = false, mddRequested = false, mddPending = false, mddNoteOn = false;
+	bool mddUsed = false;                                         // MDD settings exist for this clip and must be saved.
+	std::array<uint8_t, 4> mddLastSentCC{0xFF, 0xFF, 0xFF, 0xFF}; // Runtime only.
 	uint64_t mddTick = 0, mddOffAt = 0, mddLastProcessed = UINT64_MAX;
 	uint8_t mddNote = 60;
 	int32_t mddNormalPos = 0, mddNormalRepeat = 0;
@@ -67,6 +69,10 @@ public:
 	bool applyMddRoute(ModelStackWithTimelineCounter* stack, int lane, const snake::Route& oldRoute,
 	                   const snake::Route& newRoute);
 	int mddQuantize(int note, Song* song) const;
+	void applyMddRouteTargetNames(char const* names);
+	void setScaleModeKeepingScroll(bool scaleMode, Song* song);
+	int32_t mddTicksUntilNextEvent() const;
+	int32_t mddTicksUntilSwitch(Song* song) const;
 
 	~InstrumentClip() override;
 	void increaseLengthWithRepeats(ModelStackWithTimelineCounter* modelStack, int32_t newLength,

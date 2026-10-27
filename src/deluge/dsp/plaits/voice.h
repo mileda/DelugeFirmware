@@ -52,7 +52,8 @@ public:
 	}
 	PlaitsVoice(const PlaitsVoice&) = delete;
 	PlaitsVoice& operator=(const PlaitsVoice&) = delete;
-	void render(uint32_t phaseIncrement, float harmonics, float timbre, float morph, float* output, size_t count) {
+	void render(uint32_t phaseIncrement, float harmonics, float timbre, float morph, float* output, size_t count,
+	            bool eco = false) {
 		if (!phaseIncrement) {
 			std::fill_n(output, count, 0.f);
 			lastOutput_ = 0.f;
@@ -83,6 +84,7 @@ public:
 			// Static dispatch allows engine-specific inlining; AUX is unused.
 			switch (model_) {
 			case 0:
+				static_cast<plaits::FMEngine*>(engine_)->set_eco(eco);
 				static_cast<plaits::FMEngine*>(engine_)->Render(p, output, nullptr, n, &enveloped);
 				break;
 			case 1:

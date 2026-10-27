@@ -51,7 +51,6 @@
 #include "playback/playback_handler.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/sound/sound_instrument.h"
-#include "sequencer/snake_codec.h"
 #include "storage/audio/audio_file_manager.h"
 #include "storage/flash_storage.h"
 #include "storage/multi_range/multi_wave_table_range.h"
@@ -141,6 +140,8 @@ void Sound::initParams(ParamManager* paramManager) {
 	PatchedParamSet* patchedParams = paramManager->getPatchedParamSet();
 	patchedParams->params[params::LOCAL_PLAITS_A_ENGINE].setCurrentValueBasicForSetup(0);
 	patchedParams->params[params::LOCAL_PLAITS_B_ENGINE].setCurrentValueBasicForSetup(0);
+	patchedParams->params[params::LOCAL_PLAITS_A_MORPH].setCurrentValueBasicForSetup(-2147483648);
+	patchedParams->params[params::LOCAL_PLAITS_B_MORPH].setCurrentValueBasicForSetup(-2147483648);
 	patchedParams->params[params::LOCAL_VOLUME].setCurrentValueBasicForSetup(0);
 	patchedParams->params[params::LOCAL_OSC_A_VOLUME].setCurrentValueBasicForSetup(2147483647);
 	patchedParams->params[params::LOCAL_OSC_B_VOLUME].setCurrentValueBasicForSetup(2147483647);
@@ -415,14 +416,13 @@ void Sound::recalculatePatchingToParam(uint8_t p, ParamManagerForTimeline* param
 Error Sound::readTagFromFileOrError(Deserializer& reader, char const* tagName, ParamManagerForTimeline* paramManager,
                                     int32_t readAutomationUpToPos, ArpeggiatorSettings* arpSettings, Song* song) {
 
-	if (!strcmp(tagName, "snakeCustomV1") || !strcmp(tagName, "snakeCustomV2")) {
-		const bool version2 = !strcmp(tagName, "snakeCustomV2");
-		String settings;
-		const Error error = reader.readTagOrAttributeValueString(&settings);
-		if (error != Error::NONE)
-			return error;
-		deluge::sequencer::SnakeModulationCodec::decode(settings.get(), snakeCustomConfig, snakeCustomEnabled);
-		reader.exitTag(version2 ? "snakeCustomV2" : "snakeCustomV1");
+	if (!strcmp(tagName, "plaitsEco")) {
+		plaitsEco = reader.readTagOrAttributeValueInt() != 0;
+		reader.exitTag(tagName);
+	}
+	else if (!strcmp(tagName, "snakeCustomV1") || !strcmp(tagName, "snakeCustomV2")) {
+		// Retired sound-level Snake modulation (superseded by the clip-level MDD sequencer). Older files are skipped.
+		reader.exitTag(tagName);
 	}
 	else if (!strcmp(tagName, "osc1")) {
 		reader.match('{');
@@ -1362,21 +1362,15 @@ PatchCableAcceptance Sound::maySourcePatchToParam(PatchSource s, uint8_t p, Para
 	PatchedParamSet* patchedParams = paramManager->getPatchedParamSet();
 	if (p >= params::GLOBAL_MDD_CUSTOM_1 && p <= params::GLOBAL_MDD_CUSTOM_4)
 		return PatchCableAcceptance::DISALLOWED;
-	if (s >= PatchSource::SNAKE_CUSTOM_1 && s <= PatchSource::SNAKE_CUSTOM_4 && p < params::GLOBAL_NONE) {
-		auto* cables = paramManager->getPatchCableSet();
-		for (int i = 0; i < cables->numPatchCables; ++i) {
-			auto& cable = cables->patchCables[i];
-			if (cable.from != s && cable.from >= PatchSource::SNAKE_CUSTOM_1
-			    && cable.from <= PatchSource::SNAKE_CUSTOM_4 && cable.destinationParamDescriptor.isJustAParam()
-			    && cable.destinationParamDescriptor.getJustTheParam() == p
-			    && (cable.param.isAutomated() || cable.param.getCurrentValue() != 0))
-				return PatchCableAcceptance::DISALLOWED;
-		}
-	}
 	switch (p) {
 	case params::LOCAL_PLAITS_A_ENGINE:
 	case params::LOCAL_PLAITS_B_ENGINE:
 		return getSynthMode() == SynthMode::SUBTRACTIVE && isPlaits(sources[p - params::LOCAL_PLAITS_A_ENGINE].oscType)
+		           ? PatchCableAcceptance::ALLOWED
+		           : PatchCableAcceptance::EDITABLE;
+	case params::LOCAL_PLAITS_A_MORPH:
+	case params::LOCAL_PLAITS_B_MORPH:
+		return getSynthMode() == SynthMode::SUBTRACTIVE && isPlaits(sources[p - params::LOCAL_PLAITS_A_MORPH].oscType)
 		           ? PatchCableAcceptance::ALLOWED
 		           : PatchCableAcceptance::EDITABLE;
 	case params::GLOBAL_NONE:
@@ -1407,8 +1401,6 @@ PatchCableAcceptance Sound::maySourcePatchToParam(PatchSource s, uint8_t p, Para
 		                                                                      : PatchCableAcceptance::EDITABLE;
 
 	case params::LOCAL_CARRIER_0_FEEDBACK:
-		if (synthMode == SynthMode::SUBTRACTIVE && isPlaits(sources[0].oscType))
-			return PatchCableAcceptance::ALLOWED;
 		if (synthMode != SynthMode::FM) {
 			return PatchCableAcceptance::DISALLOWED;
 		}
@@ -1433,8 +1425,6 @@ PatchCableAcceptance Sound::maySourcePatchToParam(PatchSource s, uint8_t p, Para
 		                                                                      : PatchCableAcceptance::EDITABLE;
 
 	case params::LOCAL_CARRIER_1_FEEDBACK:
-		if (synthMode == SynthMode::SUBTRACTIVE && isPlaits(sources[1].oscType))
-			return PatchCableAcceptance::ALLOWED;
 		if (synthMode != SynthMode::FM) {
 			return PatchCableAcceptance::DISALLOWED;
 		}
@@ -4035,13 +4025,23 @@ bool Sound::readParamTagFromFile(Deserializer& reader, char const* tagName, Para
 		                         readAutomationUpToPos);
 		reader.exitTag("modulator2Feedback");
 	}
-	else if (!strcmp(tagName, "carrier1Feedback")) {
-		patchedParams->readParam(reader, patchedParamsSummary, params::LOCAL_CARRIER_0_FEEDBACK, readAutomationUpToPos);
-		reader.exitTag("carrier1Feedback");
+	else if (!strcmp(tagName, "carrier1Feedback") || !strcmp(tagName, "carrier2Feedback")) {
+		const int32_t osc = tagName[7] - '1';
+		const int32_t feedback = params::LOCAL_CARRIER_0_FEEDBACK + osc;
+		patchedParams->readParam(reader, patchedParamsSummary, feedback, readAutomationUpToPos);
+		reader.exitTag(tagName);
+		// Files before plaitsAMorph/plaitsBMorph stored Plaits Morph in carrier feedback. Both map a preset
+		// value P to 0.5 + P / 2^32 when unmodulated, so copying is lossless. A later plaitsXMorph tag overrides.
+		const int32_t morph = params::LOCAL_PLAITS_A_MORPH + osc;
+		patchedParams->params[morph].cloneFrom(&patchedParams->params[feedback], true);
+		if (patchedParams->params[morph].isAutomated()) {
+			patchedParams->paramHasAutomationNow(patchedParamsSummary, morph);
+		}
 	}
-	else if (!strcmp(tagName, "carrier2Feedback")) {
-		patchedParams->readParam(reader, patchedParamsSummary, params::LOCAL_CARRIER_1_FEEDBACK, readAutomationUpToPos);
-		reader.exitTag("carrier2Feedback");
+	else if (!strcmp(tagName, "plaitsAMorph") || !strcmp(tagName, "plaitsBMorph")) {
+		patchedParams->readParam(reader, patchedParamsSummary,
+		                         params::LOCAL_PLAITS_A_MORPH + (tagName[6] == 'B' ? 1 : 0), readAutomationUpToPos);
+		reader.exitTag(tagName);
 	}
 	else if (!strcmp(tagName, "pitchAdjust")) {
 		patchedParams->readParam(reader, patchedParamsSummary, params::LOCAL_PITCH_ADJUST, readAutomationUpToPos);
@@ -4151,6 +4151,16 @@ void Sound::writeParamsToFile(Serializer& writer, ParamManager* paramManager, bo
 
 	patchedParams->writeParamAsAttribute(writer, "carrier1Feedback", params::LOCAL_CARRIER_0_FEEDBACK, writeAutomation);
 	patchedParams->writeParamAsAttribute(writer, "carrier2Feedback", params::LOCAL_CARRIER_1_FEEDBACK, writeAutomation);
+	// Written after carrier feedback so it overrides the legacy migration on load. Skipped when the reader would
+	// reconstruct the same value from carrier feedback anyway.
+	for (int32_t osc = 0; osc < kNumSources; osc++) {
+		auto& morph = patchedParams->params[params::LOCAL_PLAITS_A_MORPH + osc];
+		auto& feedback = patchedParams->params[params::LOCAL_CARRIER_0_FEEDBACK + osc];
+		if (morph.isAutomated() || feedback.isAutomated() || morph.getCurrentValue() != feedback.getCurrentValue()) {
+			patchedParams->writeParamAsAttribute(writer, osc ? "plaitsBMorph" : "plaitsAMorph",
+			                                     params::LOCAL_PLAITS_A_MORPH + osc, writeAutomation);
+		}
+	}
 
 	patchedParams->writeParamAsAttribute(writer, "pitchAdjust", params::LOCAL_PITCH_ADJUST, writeAutomation, true);
 	patchedParams->writeParamAsAttribute(writer, "oscAPitchAdjust", params::LOCAL_OSC_A_PITCH_ADJUST, writeAutomation,
@@ -4244,8 +4254,9 @@ void Sound::writeToFile(Serializer& writer, bool savingSong, ParamManager* param
 		writer.writeAttribute("path", pathAttribute);
 	}
 	writer.writeAttribute("maxVoices", maxVoiceCount);
-	const auto snakeSettings = deluge::sequencer::SnakeModulationCodec::encode(snakeCustomConfig, snakeCustomEnabled);
-	writer.writeAttribute("snakeCustomV2", snakeSettings.data());
+	if (plaitsEco) {
+		writer.writeAttribute("plaitsEco", 1);
+	}
 
 	writer.writeOpeningTagEnd();
 
@@ -5097,7 +5108,26 @@ void Sound::checkVoiceExists(const ActiveVoice& voice, const char* error) const 
 }
 
 #pragma GCC diagnostic pop
-// Called by the transport-side Snake driver, not by individual voices.
+// UI rule: one MDD Custom source per destination. Kept out of maySourcePatchToParam(), which setupPatching() uses,
+// so cables that already exist (e.g. from a file) are never silently disabled.
+bool Sound::mddCustomTargetTaken(PatchSource s, uint8_t p, ParamManager* paramManager) {
+	if (s < PatchSource::SNAKE_CUSTOM_1 || s > PatchSource::SNAKE_CUSTOM_4 || p >= params::GLOBAL_NONE) {
+		return false;
+	}
+	auto* cables = paramManager->getPatchCableSet();
+	for (int i = 0; i < cables->numPatchCables; ++i) {
+		auto& cable = cables->patchCables[i];
+		if (cable.from != s && cable.from >= PatchSource::SNAKE_CUSTOM_1 && cable.from <= PatchSource::SNAKE_CUSTOM_4
+		    && cable.destinationParamDescriptor.isJustAParam()
+		    && cable.destinationParamDescriptor.getJustTheParam() == p
+		    && (cable.param.isAutomated() || cable.param.getCurrentValue() != 0)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Called by the clip-level MDD driver, not by individual voices.
 void Sound::setSnakeCustomValues(const std::array<int32_t, 4>& values) {
 	for (unsigned i = 0; i < values.size(); ++i) {
 		const unsigned source = util::to_underlying(PatchSource::SNAKE_CUSTOM_1) + i;
@@ -5109,30 +5139,26 @@ void Sound::setSnakeCustomValues(const std::array<int32_t, 4>& values) {
 	}
 }
 
-bool Sound::setSnakePlaitsModel(unsigned oscillator, int model) {
-	if (oscillator >= kNumSources || model < -1 || model > 2)
-		return false;
-	snakePlaitsModels[oscillator] = model;
-	return true;
-}
-
 void Sound::updateSnakeCustom(ParamManager* paramManager) {
-	if (mddClipActive) {
-		if (mddBakedSources && paramManager) {
-			auto* patched = paramManager->getPatchedParamSet();
-			std::array<int32_t, 4> values{};
-			for (int i = 0; i < 4; ++i)
-				if (mddBakedSources & (1u << i))
-					values[i] = std::max<int32_t>(0, patched->getValue(params::GLOBAL_MDD_CUSTOM_1 + i));
-			setSnakeCustomValues(values);
+	// Most Sounds never use MDD: four integer reads, then leave.
+	if (!mddClipActive) {
+		constexpr auto first = util::to_underlying(PatchSource::SNAKE_CUSTOM_1);
+		if (globalSourceValues[first] | globalSourceValues[first + 1] | globalSourceValues[first + 2]
+		    | globalSourceValues[first + 3]) {
+			setSnakeCustomValues({}); // Owner went away without closing (e.g. clip deleted).
 		}
 		return;
 	}
-	if (snakeCustomEnabled && playbackHandler.isEitherClockActive()) {
-		const auto tick = std::max<int64_t>(playbackHandler.getActualSwungTickCount(), 0);
-		deluge::sequencer::Snake::updateModulation(snakeCustomConfig, static_cast<uint64_t>(tick), *this);
+	if (!mddBakedSources || !paramManager) {
+		return; // Live MDD publishes from the transport tick.
 	}
-	else {
-		deluge::sequencer::Snake::clearModulation(*this);
+	// Written (baked) Custom curves are native automation on the clip; publish their current values.
+	auto* patched = paramManager->getPatchedParamSet();
+	std::array<int32_t, 4> values{};
+	for (int i = 0; i < 4; ++i) {
+		if (mddBakedSources & (1u << i)) {
+			values[i] = std::max<int32_t>(0, patched->getValue(params::GLOBAL_MDD_CUSTOM_1 + i));
+		}
 	}
+	setSnakeCustomValues(values);
 }

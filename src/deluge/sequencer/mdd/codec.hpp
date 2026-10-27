@@ -5,7 +5,9 @@ namespace snake {
 class Codec {
 public:
 	static constexpr size_t legacyBytes = 1 + 8 + 3 + 7 * 53 + 16 * 4;
-	static constexpr size_t bytes = legacyBytes + 5;
+	static constexpr size_t v2Bytes = legacyBytes + 5;
+	static constexpr size_t bytes = v2Bytes + 4; // + MIDI CC per Custom lane
+	static constexpr size_t v2Size() { return v2Bytes; }
 	using Text = std::array<char, bytes * 2 + 1>;
 	static Text encode(const Controller& ui, bool enabled, uint64_t tick) {
 		Text out{};
@@ -55,10 +57,12 @@ public:
 		put(ui.core.ties, 2);
 		put(ui.core.overlap, 2);
 		put(ui.core.legato, 1);
+		for (auto cc : ui.midiCC)
+			put(cc, 1);
 		return out;
 	}
 	static bool decode(std::string_view text, Controller& ui, bool& enabled, uint64_t& tick, int targetLimit) {
-		if (text.size() != bytes * 2 && text.size() != legacyBytes * 2)
+		if (text.size() != bytes * 2 && text.size() != v2Bytes * 2 && text.size() != legacyBytes * 2)
 			return false;
 		for (char c : text)
 			if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
@@ -113,7 +117,7 @@ public:
 				if (r.target >= targetLimit || r.depth == -32768)
 					return false;
 			}
-		if (text.size() == bytes * 2) {
+		if (text.size() >= v2Bytes * 2) {
 			candidate.core.ties = get(2);
 			candidate.core.overlap = get(2);
 			auto legato = get(1);
@@ -121,11 +125,19 @@ public:
 				return false;
 			candidate.core.legato = legato;
 		}
+		if (text.size() == bytes * 2) {
+			for (auto& cc : candidate.midiCC) {
+				cc = get(1);
+				if (cc > 119 && cc != Controller::kNoMidiCC)
+					return false;
+			}
+		}
 		ui.quarterTicks = resolution ? 3u << (resolution - 1) : ui.quarterTicks;
 		ui.core = candidate.core;
 		ui.low = candidate.low;
 		ui.high = candidate.high;
 		ui.routes = candidate.routes;
+		ui.midiCC = candidate.midiCC;
 		ui.custom = custom;
 		ui.choose(lane);
 		ui.back();

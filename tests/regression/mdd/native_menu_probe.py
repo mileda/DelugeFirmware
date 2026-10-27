@@ -60,9 +60,10 @@ stubs = r"""
 #include <string_view>
 #include <vector>
 #include <iterator>
+#include <array>
 namespace deluge {template<class T> using vector=std::vector<T>; namespace hid {using Button=int; namespace button {constexpr int SELECT_ENC=0,BACK=1,SHIFT=2,SYNTH=3,KIT=4,MIDI=5,CV=6;}} namespace l10n {enum class String{EMPTY_STRING,STRING_FOR_TYPE};}}
 enum class ActionResult {DEALT_WITH,NOT_DEALT_WITH,REMIND_ME_OUTSIDE_CARD_ROUTINE};
-enum class ClipType{INSTRUMENT}; enum class OutputType{SYNTH,KIT,MIDI};
+enum class ClipType{INSTRUMENT}; enum class OutputType{SYNTH,KIT,MIDI_OUT,CV};
 enum class PatchSource{SNAKE_CUSTOM_1}; enum class PatchCableAcceptance{DISALLOWED,ALLOWED};
 enum Scale{MAJOR,MINOR,NUM_PRESET_SCALES,USER_SCALE=NUM_PRESET_SCALES};
 constexpr int UI_MODE_NONE=0, MODEL_STACK_MAX_SIZE=64; int currentUIMode=0;
@@ -91,6 +92,7 @@ struct SoundEditor : UI {TestParams*currentParamManager=&testParams;MenuItem* cu
  void focusRegained(){Buttons::selectButtonPressUsedUp=true;beginScreen();}
  ActionResult exitCompletely(){activeUI=rootUI;return ActionResult::DEALT_WITH;}
  ActionResult padAction(int32_t,int32_t,int32_t);ActionResult buttonAction(deluge::hid::Button,bool,bool);
+ ActionResult potentialShortcutPadAction(int32_t,int32_t,int32_t){++stockShortcuts;return ActionResult::NOT_DEALT_WITH;}
 } soundEditor;
 void openUI(SoundEditor* ui){activeUI=ui;ui->beginScreen();}
 namespace deluge::gui::menu_item {
@@ -105,9 +107,9 @@ class HorizontalMenu:public Submenu {MenuItem* selected{};public:int lastSelecte
 namespace sequence::mdd {extern MenuItem*settingsMenu;extern MenuItem*valueMenu;bool owns(MenuItem*);void open(MenuItem*);void control(snake::Control);void refreshValue();void editStep(int);void selectFirstPageColumn(int);void armTimer();ActionResult serviceTimer();}
 }
 int mod(int a,int b){return (a%b+b)%b;}
-struct Sound:ModControllableAudio{PatchCableAcceptance maySourcePatchToParam(PatchSource,int p,void*){return p<4?PatchCableAcceptance::ALLOWED:PatchCableAcceptance::DISALLOWED;}}sound;
+struct Sound:ModControllableAudio{bool mddCustomTargetTaken(PatchSource,int p,void*){return p==takenTarget;}int takenTarget=-2;PatchCableAcceptance maySourcePatchToParam(PatchSource,int p,void*){return p<4?PatchCableAcceptance::ALLOWED:PatchCableAcceptance::DISALLOWED;}}sound;
 struct Output {ModControllableAudio*toModControllable(){return &sound;}}output;
-struct Clip {ClipType type=ClipType::INSTRUMENT;snake::Controller mdd;bool mddRequested=true,mddEnabled=true,inScaleMode=false;uint8_t mddBakedCustom=0;Output*output=&::output;int paramManager=0;bool failRoute=false;int routeCalls=0;
+struct Song;struct Clip {ClipType type=ClipType::INSTRUMENT;snake::Controller mdd;bool mddRequested=true,mddEnabled=true,mddPending=false,inScaleMode=false;std::array<uint8_t,4> mddLastSentCC{};void setScaleModeKeepingScroll(bool b,Song*){inScaleMode=b;}uint8_t mddBakedCustom=0;Output*output=&::output;int paramManager=0;bool failRoute=false;int routeCalls=0;
  int writes=0;bool failWrite=false;Error writeMddToNormal(void*){++writes;if(failWrite)return Error::INSUFFICIENT_RAM;mddRequested=mddEnabled=false;return Error::NONE;}
  void requestMdd(bool b){mddRequested=mddEnabled=b;}
  bool applyMddRoute(void*,int,const snake::Route&,const snake::Route&){++routeCalls;return !failRoute;}
@@ -117,7 +119,7 @@ Clip*getCurrentClip(){return &clipObject;}Clip*getCurrentInstrumentClip(){return
 OutputType outputType=OutputType::SYNTH;OutputType getCurrentOutputType(){return outputType;}
 struct Song{struct{int rootNote=0;}key;bool failScale=false;Scale scale=MAJOR;int getQuarterNoteLength(){return 24;}Scale getCurrentScale(){return scale;}void transposeAllScaleModeClips(int n){key.rootNote+=n;}Scale setScale(Scale s){if(failScale)return USER_SCALE;scale=s;return s;}void*setupModelStackWithCurrentClip(char*){return this;}}song,*currentSong=&song;
 const char*getScaleName(Scale s){return s==MAJOR?"Major":s==MINOR?"Minor":"User";}
-namespace deluge::modulation::params {enum class Kind{PATCHED};constexpr int GLOBAL_MDD_CUSTOM_1=4,GLOBAL_NONE=8,LOCAL_PLAITS_A_ENGINE=2,LOCAL_PLAITS_B_ENGINE=3;const char* getParamDisplayName(Kind,int){return "Target";}}
+namespace deluge::modulation::params {enum class Kind{PATCHED};constexpr int GLOBAL_MDD_CUSTOM_1=4,GLOBAL_NONE=8,LOCAL_PLAITS_A_ENGINE=2,LOCAL_PLAITS_B_ENGINE=3;const char* getParamDisplayName(Kind,int){return "Target";}const char* getParamDisplayName(Kind k,int p,ModControllableAudio*){return getParamDisplayName(k,p);}}
 constexpr int kDisplayWidth=16,kHorizontalMenuSlotYOffset=5,kTextSpacingX=6,kTextSpacingY=7,OLED_MAIN_WIDTH_PIXELS=128,OLED_MAIN_TOPMOST_PIXEL=0,kTextTitleSizeY=10,kTextTitleSpacingX=9;
 uint64_t nowMs=0;uint64_t mddTimeMs(){return nowMs;}
 struct InstrumentClipView:UI{bool mddGridWasRendered=false;bool mddControls()const{return clipObject.mddEnabled||clipObject.mddRequested;}void refreshMdd(){}ActionResult timerCallback();ActionResult padAction(int32_t,int32_t,int32_t);ActionResult buttonAction(deluge::hid::Button,bool,bool);}instrumentClipView;
@@ -222,7 +224,26 @@ int main(){using namespace deluge::gui::menu_item::sequence::mdd;
  assert(writeConfirmation.selectButtonPress()==nullptr&&clipObject.writes==0&&clipObject.mddEnabled);
  writeConfirmation.selectEncoderAction(1);clipObject.failWrite=true;assert(writeConfirmation.selectButtonPress()==NO_NAVIGATION&&clipObject.mddEnabled);
  clipObject.failWrite=false;assert(writeConfirmation.selectButtonPress()==NO_NAVIGATION&&!clipObject.mddEnabled);
- std::cout<<"PASS native MDD: encoder writes, routes/rollback, root/scale, foreground pad forwarding, mute/hold/length, lane safety, held controls, stock Shift and mode navigation\n";
+ // Grid blocks: a press in the Gates block selects Gates and edits its cell.
+ clipObject.mddRequested=clipObject.mddEnabled=true;rootUI=activeUI=&instrumentClipView;s.choose(0);
+ nowMs=2000;instrumentClipView.padAction(5,7,1);assert(s.lane==1&&s.selectedStep==1);nowMs=2050;instrumentClipView.padAction(5,7,0);assert(clipObject.mdd.core.lanes[1].muted&(1<<1));
+ clipObject.mdd.core.lanes[1].muted=0;
+ // SHIFT + pad in MDD view goes to the stock shortcut and never edits cells.
+ int before=soundEditor.stockShortcuts;Buttons::shift=true;assert(instrumentClipView.padAction(5,7,1)==ActionResult::DEALT_WITH);Buttons::shift=false;assert(soundEditor.stockShortcuts==before+1&&!clipObject.mdd.core.lanes[1].muted);
+ // BACK keeps its stock undo meaning in MDD view.
+ assert(instrumentClipView.buttonAction(deluge::hid::button::BACK,true,false)==ActionResult::NOT_DEALT_WITH);
+ // Card routine: MDD pads are deferred like stock edit pads.
+ sdRoutineLock=true;assert(instrumentClipView.padAction(0,7,1)==ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE);sdRoutineLock=false;
+ // Exclusivity from existing cables is honoured by the Target list.
+ s.choose(3);sound.takenTarget=1;assert(!targetMenu.allowed(1)&&targetMenu.allowed(0));sound.takenTarget=-2;
+ // A non-Custom lane never indexes routes[] out of range.
+ s.choose(0);s.custom=2;depthMenu.readCurrentValue();targetMenu.readCurrentValue();
+ // MIDI clips: Map opens the CC page; picking a CC stores it and re-arms sending.
+ outputType=OutputType::MIDI_OUT;soundEditor.current=nullptr;control(snake::Control::Map);assert(soundEditor.current==&midiMapMenu&&s.lane==5);
+ clipObject.mddLastSentCC[2]=7;midiCCMenu.readCurrentValue();assert(midiCCMenu.getValue()==0);midiCCMenu.selectEncoderAction(75);assert(s.midiCC[2]==74&&clipObject.mddLastSentCC[2]==0xFF);
+ midiCCMenu.selectEncoderAction(-200);assert(s.midiCC[2]==snake::Controller::kNoMidiCC);
+ outputType=OutputType::CV;control(snake::Control::Map);assert(displayObject.popup=="Map needs Synth or MIDI");outputType=OutputType::SYNTH;
+ std::cout<<"PASS native MDD: encoder writes, routes/rollback, root/scale, foreground pad forwarding, mute/hold/length, lane safety, held controls, stock Shift and mode navigation, grid blocks, BACK undo, card-routine deferral, MIDI CC map\n";
 }
 """
 code = (

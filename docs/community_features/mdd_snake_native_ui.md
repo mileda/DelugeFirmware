@@ -1,3 +1,31 @@
+**27 Ekim 2026 güncellemesi:** Aşağıdaki davranışlar eski tarihli notların yerine geçer. Ayrıntılar: [inceleme düzeltmeleri](../custom/REVIEW_FIXES_20261027.md).
+
+## Grid ve tuşlar (güncel)
+
+- **Dört blok:** Satır 4–7'de yan yana dört 4×4 blok vardır: Notes (kolon 1–4), Gates (5–8), Velocity (9–12) ve seçili Custom (13–16). Her blok kendi playhead'ini gösterir. Bir bloğa basmak o lane'i seçer; seçili lane parlak, diğerleri sönük çizilir. Lane'in uzunluk/shift/shape ile ulaşamadığı hücreler ve mute hücreler çok sönüktür. Custom 1–4'ün her birinin kendi rengi vardır.
+- **Kontrol padleri** değişmedi: satır 3, soldan 10 pad (Notes, Gates, Velocity, Custom, Random, Reset, Song Key, Map, MDD Snake, Write).
+- **BACK** artık her yerde stock anlamındadır: Undo, SHIFT+BACK Redo. MDD menüsüne SELECT (Sound menüsü → Sequencer) veya MDD Snake kontrol padiyle girilir.
+- **SHIFT + pad** MDD ekranında da stock sound parametre kısayollarını açar. Gizli Normal grid'e hiçbir zaman nota yazmaz.
+- **Dikey encoder:** Notes lane'ini 1 yarım ton transpoze eder; SHIFT ile 1 oktav. 0–127 dışına taşacaksa "Range limit" gösterir.
+- **Yatay encoder:** Seçili lane'in Shift değerini döndürür (0–15). Gizli clip uzunluğu ve scroll değişmez; clip uzunluğunu (WRITE uzunluğu) Normal modda ayarla.
+- **Song Key:** Root/Scale penceresinin adı artık "Song Key"dir; değerler tüm şarkının key'idir. MDD içindeki SCALE butonu ve Song Key menüsü Normal grid'in görünen alt notasını korur, geri dönünce grid kaymaz.
+- **MIDI clip'ler:** Map padi "Map to MIDI CC" sayfasını açar. Her Custom lane için CC 0–119 veya Off seçilir. Değer 7-bit olarak, yalnızca değiştiğinde gönderilir. CV clip'lerde Map yoktur ("Map needs Synth or MIDI").
+- **Note Row Editor** artık Sequencer ve MDD Automation öğelerini göstermez; bunlar clip ayarıdır ve Sound menüsünde kalır.
+
+## Kayıt ve uyumluluk (güncel)
+
+- MDD verisi yalnızca clip MDD'yi en az bir kez kullandıysa yazılır (`mddSnakeV3`). Normal clip'ler ve kit'ler stock boyutunda kalır.
+- Map hedefleri ayrıca isimle (`mddRouteTargets`) kaydedilir; ileride parametre listesi değişse de doğru hedefe bağlı kalır. Eski V1/V2 dosyalardaki sayısal hedefler otomatik taşınır.
+- V3 dosyalar kaydedilen lane hızlarını korur. Yüklenince 1/16'ya normalleştirme yalnızca eski V1/V2 dosyalarda yapılır.
+- Okunamayan MDD verisi artık şarkının tamamını yüklenemez yapmaz: o clip Normal modda, varsayılan MDD ayarlarıyla açılır.
+- Eski ses düzeyi "Snake Custom" menüsü ve `snakeCustomV1/V2` verisi kaldırıldı; eski dosyalarda bu alan yok sayılır.
+
+## Performans (güncel)
+
+MDD artık her tick'te değil, yalnızca bir lane step sınırında veya bekleyen bir note-off'ta işlenir. Varsayılan 1/16 düzende bu, 96 tick/çeyrek çözünürlükte bar başına 384 yerine 32 olay demektir. Çıkış birebir aynıdır: 600 rastgele yapılandırmada her-tick işlemeyle karşılaştırıldı. Mod geçişi de bir sonraki 1/16 sınırına zamanlanır.
+
+---
+
 **12 October feature update:** [WRITE Custom automation, exclusive targets, Tie/Legato/Overlap](../custom/MDD_WRITE_TIES_20261012.md). The new behavior supersedes the earlier dated notes below.
 
 # MDD — arpeggiator tarzı yatay OLED pencereleri

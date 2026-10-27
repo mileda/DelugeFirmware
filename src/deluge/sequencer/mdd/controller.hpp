@@ -29,7 +29,7 @@ constexpr int32_t depthQ30(int16_t depth) {
 	return int64_t(depthPercent(depth)) * 1073741824 / 100;
 }
 struct Route {
-	int target = -1;
+	int16_t target = -1; // Patched param ID, -1 = none. Saved by name (mddRouteTargets), not by this number.
 	int16_t depth = 32767;
 };
 struct Controller {
@@ -39,6 +39,9 @@ struct Controller {
 	int lane = 0, custom = 0, routeSlot = 0;
 	Control held = Control::None;
 	std::array<std::array<Route, 4>, 4> routes{};
+	// MIDI clips: CC number each Custom lane sends (0..119), or kNoMidiCC.
+	static constexpr uint8_t kNoMidiCC = 255;
+	std::array<uint8_t, 4> midiCC{kNoMidiCC, kNoMidiCC, kNoMidiCC, kNoMidiCC};
 	std::array<uint16_t, 7> low{}, high{127, 65535, 127, 65535, 65535, 65535, 65535};
 	uint32_t quarterTicks = 24;
 	bool needsInitialSpeed = true;
@@ -162,10 +165,26 @@ struct Controller {
 		v.fill(i == 0 ? 60 : i == 1 ? 32768 : i == 2 ? 100 : 0);
 	}
 	bool map(int slot, int target, int16_t depth) {
-		if (lane < 3 || slot < 0 || slot >= 4 || target < -1)
+		if (lane < 3 || slot < 0 || slot >= 4 || target < -1 || target > INT16_MAX)
 			return false;
-		routes[lane - 3][slot] = {target, depth};
+		routes[lane - 3][slot] = {static_cast<int16_t>(target), depth};
 		return true;
+	}
+	// Restore factory MDD settings (used when saved data cannot be read).
+	void resetToDefault(uint32_t ticks) {
+		core = Core{};
+		for (auto& l : core.lanes)
+			l.ticks = 6;
+		routes = {};
+		midiCC.fill(kNoMidiCC);
+		low = {};
+		high = {127, 65535, 127, 65535, 65535, 65535, 65535};
+		selectedStep = lane = custom = routeSlot = 0;
+		quarterTicks = 24;
+		needsInitialSpeed = true;
+		syncClock(ticks);
+		choose(0);
+		back();
 	}
 	void back() {
 		gestures.cancel();

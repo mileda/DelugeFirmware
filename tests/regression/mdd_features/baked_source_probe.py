@@ -20,7 +20,6 @@ def method(signature):
 
 code = (
     r"""
-#include "sequencer/snake.h"
 #include <array>
 #include <cassert>
 #include <algorithm>
@@ -33,13 +32,10 @@ struct Patched{std::array<int32_t,4> values{};int32_t getValue(unsigned i){retur
 struct Params{Patched p;Patched*getPatchedParamSet(){return &p;}};
 using ParamManager=Params;
 struct InstrumentClip{Params paramManager;};
-struct Clock{bool isEitherClockActive(){return false;}int64_t getActualSwungTickCount(){return 0;}}playbackHandler;
 struct Sound{
- bool mddClipActive=false,snakeCustomEnabled=false;uint8_t mddBakedSources=0;const void*mddClipOwner=nullptr;
+ bool mddClipActive=false;uint8_t mddBakedSources=0;const void*mddClipOwner=nullptr;
  std::array<int32_t,19>globalSourceValues{};unsigned sourcesChanged=0;
- deluge::sequencer::SnakeConfig snakeCustomConfig;
  void setSnakeCustomValues(const std::array<int32_t,4>&);
- bool setSnakePlaitsModel(unsigned,int){return true;}
  void updateSnakeCustom(ParamManager*);
 };
 """
@@ -54,7 +50,9 @@ int main(){
  sound.updateSnakeCustom(&clip.paramManager);assert(sound.globalSourceValues[16]==INT32_MAX/2); // no double application
  sound.mddBakedSources=0;sound.setSnakeCustomValues({123,456,789,0});sound.updateSnakeCustom(&clip.paramManager);assert(sound.globalSourceValues[15]==123); // MDD live data wins over written curves
  sound.mddClipActive=false;sound.updateSnakeCustom(&clip.paramManager);for(int i=15;i<19;++i)assert(sound.globalSourceValues[i]==0);
- std::cout<<"PASS real Sound bridge: native written Custom values, no double modulation, MDD live override and cleanup\n";
+ // Ordinary Sounds: nothing to do and no change bits raised.
+ sound.sourcesChanged=0;sound.updateSnakeCustom(&clip.paramManager);sound.updateSnakeCustom(nullptr);assert(sound.sourcesChanged==0);
+ std::cout<<"PASS real Sound bridge: native written Custom values, no double modulation, MDD live override, orphan cleanup and idle no-op\n";
 }
 """
 )

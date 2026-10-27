@@ -9,7 +9,8 @@ struct HeldNotes {
 		uint64_t offAt = 0;
 		bool active = false;
 	};
-	std::array<Note, 16> notes{};
+	// Monophonic notes plus Overlap/Legato tails: at most a few sound at once. Full = oldest is released.
+	std::array<Note, 8> notes{};
 	int latest = -1;
 	template <class Off>
 	void stop(Off off) {

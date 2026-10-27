@@ -98,6 +98,9 @@ enum Local : ParamType {
 	LOCAL_OSC_B_WAVE_INDEX,
 	LOCAL_PLAITS_A_ENGINE,
 	LOCAL_PLAITS_B_ENGINE,
+	// Additive (hybrid) Plaits Morph, so modulation reaches it from any knob position.
+	LOCAL_PLAITS_A_MORPH,
+	LOCAL_PLAITS_B_MORPH,
 	LOCAL_PAN,
 
 	// Local exp params begin
@@ -259,6 +262,8 @@ constexpr ParamType PATCH_CABLE = 190;
 
 /// None is the last global param, 0 indexed so it's also the number of patched params
 constexpr ParamType kNumParams = GLOBAL_NONE;
+// ParamCollectionSummary holds one bit per param in kMaxNumUnsignedIntegerstoRepAllParams words.
+static_assert(kNumParams <= 32 * 2, "Too many patched params for ParamCollectionSummary bitfields");
 constexpr ParamType kMaxNumUnpatchedParams =
     std::max<ParamType>(util::to_underlying(UNPATCHED_GLOBAL_MAX_NUM), util::to_underlying(UNPATCHED_SOUND_MAX_NUM));
 

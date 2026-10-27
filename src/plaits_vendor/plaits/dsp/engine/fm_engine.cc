@@ -33,6 +33,8 @@
 #include "plaits/dsp/oscillator/sine_oscillator.h"
 #include "plaits/dsp/downsampler/4x_downsampler.h"
 
+#include <type_traits>
+
 namespace plaits {
 
 using namespace stmlib;
@@ -56,16 +58,19 @@ void FMEngine::Reset() {
 void FMEngine::Render(
     const EngineParameters& parameters, float* out, float* aux,
     size_t size, bool* already_enveloped) {
-  if (aux) RenderInternal<true>(parameters, out, aux, size);
-  else RenderInternal<false>(parameters, out, nullptr, size);
+  if (aux) RenderInternal<true, kOversampling>(parameters, out, aux, size);
+  else if (eco_) RenderInternal<false, 2>(parameters, out, nullptr, size);
+  else RenderInternal<false, kOversampling>(parameters, out, nullptr, size);
 }
 
-template<bool render_aux>
+template<bool render_aux, size_t oversampling>
 void FMEngine::RenderInternal(
     const EngineParameters& parameters, float* out, float* aux, size_t size) {
-  
-  // 4x oversampling
-  const float note = parameters.note - 24.0f;
+  static_assert(oversampling == 4 || oversampling == 2, "FM supports 4x or 2x oversampling");
+  using CarrierDownsampler =
+      typename std::conditional<oversampling == 4, Downsampler, Downsampler2x>::type;
+  // Frequencies are normalized to the oversampled rate: 4x is two octaves down, 2x one octave.
+  const float note = parameters.note - (oversampling == 4 ? 24.0f : 12.0f);
   
   const float ratio = Interpolate(
       lut_fm_frequency_quantizer,
@@ -77,7 +82,9 @@ void FMEngine::RenderInternal(
   CONSTRAIN(target_modulator_frequency, 0.0f, 0.5f);
 
   // Reduce the maximum FM index for high pitched notes, to prevent aliasing.
-  float hf_taming = 1.0f - (modulator_note - 72.0f) * 0.025f;
+  // Taming is defined on the original 4x note scale, so both rates tame identically.
+  const float taming_note = modulator_note - (oversampling == 4 ? 0.0f : 12.0f);
+  float hf_taming = 1.0f - (taming_note - 72.0f) * 0.025f;
   CONSTRAIN(hf_taming, 0.0f, 1.0f);
   hf_taming *= hf_taming;
   
@@ -92,8 +99,10 @@ void FMEngine::RenderInternal(
   ParameterInterpolator feedback_modulation(
       &previous_feedback_, 2.0f * parameters.morph - 1.0f, size);
   
-  Downsampler carrier_downsampler(&carrier_fir_);
-  Downsampler sub_downsampler(&sub_fir_);
+  // Same feedback smoothing per output sample at either rate: 1 - 0.95^2 for 2x.
+  const float feedback_smoothing = oversampling == 4 ? 0.05f : 0.0975f;
+  CarrierDownsampler carrier_downsampler(&carrier_fir_);
+  CarrierDownsampler sub_downsampler(&sub_fir_);
   
   while (size--) {
     const float max_uint32 = 4294967296.0f;
@@ -104,7 +113,7 @@ void FMEngine::RenderInternal(
         max_uint32 * carrier_frequency.Next());
     float _modulator_frequency = modulator_frequency.Next();
 
-    for (size_t j = 0; j < kOversampling; ++j) {
+    for (size_t j = 0; j < oversampling; ++j) {
       modulator_phase_ += static_cast<uint32_t>(max_uint32 * \
            _modulator_frequency * (1.0f + previous_sample_ * phase_feedback));
       carrier_phase_ += carrier_increment;
@@ -118,7 +127,7 @@ void FMEngine::RenderInternal(
         float sub = SinePM(sub_phase_, amount * carrier * 0.25f);
         sub_downsampler.Accumulate(j, sub);
       }
-      ONE_POLE(previous_sample_, carrier, 0.05f);
+      ONE_POLE(previous_sample_, carrier, feedback_smoothing);
       carrier_downsampler.Accumulate(j, carrier);
     }
     

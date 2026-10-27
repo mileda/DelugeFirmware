@@ -142,9 +142,11 @@
 #include "gui/menu_item/note_row/probability.h"
 #include "gui/menu_item/osc/audio_recorder.h"
 #include "gui/menu_item/osc/plaits_engine.h"
+#include "gui/menu_item/osc/plaits_quality.h"
 #include "gui/menu_item/osc/pulse_width.h"
 #include "gui/menu_item/osc/retrigger_phase.h"
 #include "gui/menu_item/osc/source/feedback.h"
+#include "gui/menu_item/osc/source/plaits_morph.h"
 #include "gui/menu_item/osc/source/volume.h"
 #include "gui/menu_item/osc/source/wave_index.h"
 #include "gui/menu_item/osc/sync.h"
@@ -202,7 +204,6 @@
 #include "gui/menu_item/sidechain/sync.h"
 #include "gui/menu_item/sidechain/volume.h"
 #include "gui/menu_item/sidechain/volume_global.h"
-#include "gui/menu_item/snake_custom.h"
 #include "gui/menu_item/song/configure_macros.h"
 #include "gui/menu_item/song/midi_learn.h"
 #include "gui/menu_item/source/patched_param/modulator_feedback.h"
@@ -1519,16 +1520,6 @@ PLACE_SDRAM_BSS Submenu soundEditorRootDrumActionsMenu{
     {&drumNameEditMenu, &sample0RecorderMenu, &sample1RecorderMenu},
 };
 
-PLACE_SDRAM_BSS snake_custom::Enabled snakeCustomEnabledMenu;
-PLACE_SDRAM_BSS snake_custom::LaneMenu snakeCustomLane1{0, "Custom 1"};
-PLACE_SDRAM_BSS snake_custom::LaneMenu snakeCustomLane2{1, "Custom 2"};
-PLACE_SDRAM_BSS snake_custom::LaneMenu snakeCustomLane3{2, "Custom 3"};
-PLACE_SDRAM_BSS snake_custom::LaneMenu snakeCustomLane4{3, "Custom 4"};
-PLACE_SDRAM_BSS snake_custom::NamedSubmenu snakeCustomMenu{"Snake Custom",
-                                                           {&snakeCustomEnabledMenu, &snakeCustomLane1.menu,
-                                                            &snakeCustomLane2.menu, &snakeCustomLane3.menu,
-                                                            &snakeCustomLane4.menu}};
-
 PLACE_SDRAM_BSS Submenu soundEditorRootMenu{
     STRING_FOR_SOUND,
     {
@@ -1688,8 +1679,6 @@ PLACE_SDRAM_BSS note_row::Fill noteRowFillMenu{STRING_FOR_NOTE_ROW_EDITOR_FILL};
 // Root menu for Note Row Editor
 PLACE_SDRAM_BSS HorizontalMenu noteRowEditorRootMenu{STRING_FOR_NOTE_ROW_EDITOR,
                                                      {
-                                                         &sequencerModeMenu,
-                                                         sequence::mdd::automationMenu,
                                                          &sequenceDirectionMenu,
                                                          &noteRowProbabilityMenu,
                                                          &noteRowIteranceMenu,

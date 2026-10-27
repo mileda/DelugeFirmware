@@ -381,16 +381,16 @@ char const* getSourceDisplayNameForOLED(PatchSource s) {
 		return l10n::get(STRING_FOR_PATCH_SOURCE_Y);
 
 	case PatchSource::SNAKE_CUSTOM_1:
-		return "Snake Custom 1";
+		return "MDD Custom 1";
 
 	case PatchSource::SNAKE_CUSTOM_2:
-		return "Snake Custom 2";
+		return "MDD Custom 2";
 
 	case PatchSource::SNAKE_CUSTOM_3:
-		return "Snake Custom 3";
+		return "MDD Custom 3";
 
 	case PatchSource::SNAKE_CUSTOM_4:
-		return "Snake Custom 4";
+		return "MDD Custom 4";
 
 	default:
 		return "none";

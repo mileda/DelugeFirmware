@@ -47,9 +47,14 @@ class FMEngine : public Engine {
       size_t size,
       bool* already_enveloped);
   
+  // Deluge modification: optional 2x oversampling ("Eco"), about half the work at the cost of a
+  // softer top end and more aliasing on bright, high notes. The default stays at the original 4x.
+  void set_eco(bool eco) { eco_ = eco; }
+
  private:
-  template<bool render_aux>
+  template<bool render_aux, size_t oversampling>
   void RenderInternal(const EngineParameters& parameters, float* out, float* aux, size_t size);
+  bool eco_ = false;
   uint32_t carrier_phase_;
   uint32_t modulator_phase_;
   uint32_t sub_phase_;

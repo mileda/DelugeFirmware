@@ -94,6 +94,8 @@ public:
 	                                                               ModelStackWithThreeMainThings* modelStack) override;
 	bool doesAutomationExistOnMIDIParam(ModelStackWithThreeMainThings* modelStack, int32_t cc);
 	int32_t getOutputMasterChannel();
+	/// Used by MDD Custom lanes on MIDI clips.
+	void sendMddCC(uint8_t cc, uint8_t value);
 
 	inline bool sendsToMPE() {
 		return (getChannel() == MIDI_CHANNEL_MPE_LOWER_ZONE || getChannel() == MIDI_CHANNEL_MPE_UPPER_ZONE);
