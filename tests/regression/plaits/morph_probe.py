@@ -49,8 +49,9 @@ static int32_t linearCombo(int32_t preset,int32_t source,int32_t strength){
  auto cable=[&](int32_t src,int32_t str){int32_t scaled=multiply_32x32_rshift32(src,str);int32_t pos=scaled+536870912;int32_t pre=multiply_32x32_rshift32(total,pos);total=lshiftAndSaturate<3>(pre);};
  cable(preset,kRange);if(strength)cable(source,strength);return total-536870912;}
 // Hybrid param: cables add, then the preset value (combineCablesExp).
+// Since v1.3.0-rc3 (#5099) exp/hybrid cable sums saturate instead of wrapping.
 static int32_t hybridCombo(int32_t preset,int32_t source,int32_t strength){
- int32_t total=strength?multiply_32x32_rshift32(source,strength):0;return total+multiply_32x32_rshift32(preset,kRange);}
+ int32_t total=strength?add_saturate(0,multiply_32x32_rshift32(source,strength)):0;return add_saturate(total,multiply_32x32_rshift32(preset,kRange));}
 static float oldMorph(int32_t preset,int32_t source=0,int32_t strength=0){
  return std::clamp(getFinalParameterValueLinear(kFeedbackNeutral,linearCombo(preset,source,strength))/11863284.f,0.f,1.f);}
 static float newMorph(int32_t preset,int32_t source=0,int32_t strength=0){

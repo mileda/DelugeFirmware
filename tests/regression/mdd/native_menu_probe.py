@@ -93,6 +93,7 @@ struct SoundEditor : UI {TestParams*currentParamManager=&testParams;MenuItem* cu
  ActionResult exitCompletely(){activeUI=rootUI;return ActionResult::DEALT_WITH;}
  ActionResult padAction(int32_t,int32_t,int32_t);ActionResult buttonAction(deluge::hid::Button,bool,bool);
  ActionResult potentialShortcutPadAction(int32_t,int32_t,int32_t){++stockShortcuts;return ActionResult::NOT_DEALT_WITH;}
+ bool overlay=false;bool should_render_shortcut_overlay(){return overlay;}
 } soundEditor;
 void openUI(SoundEditor* ui){activeUI=ui;ui->beginScreen();}
 namespace deluge::gui::menu_item {
@@ -210,6 +211,7 @@ int main(){using namespace deluge::gui::menu_item::sequence::mdd;
  s.gestures.down(0,1000);s.down(snake::Control::Root);
  soundEditor.buttonAction(deluge::hid::button::SHIFT,true,false);assert(s.held==snake::Control::None&&s.gestures.held==-1);
  clipObject.mddRequested=clipObject.mddEnabled=false;assert(soundEditor.getGreyoutColsAndRows(&cols,&rows));
+ clipObject.mddRequested=clipObject.mddEnabled=true;soundEditor.overlay=true;assert(soundEditor.getGreyoutColsAndRows(&cols,&rows)&&cols==0xFFFFFFFF);soundEditor.overlay=false;
  clipObject.mddRequested=clipObject.mddEnabled=true;
  assert(instrumentClipView.buttonAction(deluge::hid::button::SELECT_ENC,true,true)==ActionResult::NOT_DEALT_WITH);
  assert(instrumentClipView.buttonAction(deluge::hid::button::SYNTH,true,false)==ActionResult::NOT_DEALT_WITH);

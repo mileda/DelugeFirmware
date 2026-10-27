@@ -73,7 +73,7 @@ OledOnlySettingToggle menuHorizontalMenus(RuntimeFeatureSettingType::HorizontalM
 SettingToggle menuTrimFromStartOfAudioClip(RuntimeFeatureSettingType::TrimFromStartOfAudioClip);
 SettingToggle menuShowBatteryLevel(RuntimeFeatureSettingType::ShowBatteryLevel);
 RoundedCornersSettingToggle menuRoundedCorners(RuntimeFeatureSettingType::RoundedCorners);
-SettingToggle menuShortcutOverlay(RuntimeFeatureSettingType::ShortcutOverlay);
+Setting menuShortcutOverlay(RuntimeFeatureSettingType::ShortcutOverlay);
 OledOnlySettingToggle menuBootGreeting(RuntimeFeatureSettingType::BootGreeting);
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
