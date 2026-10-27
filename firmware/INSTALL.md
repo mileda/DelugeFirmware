@@ -1,12 +1,16 @@
 # MDD Snake + Plaits — OLED firmware download
 
-Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC2 (Derbyshire). This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
+Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC2 (Derbyshire) plus the later release/1.3 fixes. This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
 
 ## Download
 
-[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-rc2-ad157679.bin)
+[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-review-fdadd65b.bin)
 
-[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/ad157679c9a3fa1888183e7a89552e3478c7c988) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/ad157679c9a3fa1888183e7a89552e3478c7c988.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
+[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/fdadd65b00e475f5ab73d483f88608ddab9dd6cf) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/fdadd65b00e475f5ab73d483f88608ddab9dd6cf.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
+
+SHA-256: `a30736fe6dc2adcdf0bcb6b3c59ec100f125f5a70a03f733641289b3743af40f`
+
+Earlier builds are no longer kept in this folder; they remain in the git history.
 
 ## Install
 
@@ -19,6 +23,9 @@ Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC2 (Derbysh
 These steps follow the retained [upstream SD-card update guide](../website/src/content/docs/manual/device_overview/sd_card.mdx). To reinstall a known-working firmware, repeat the update procedure with its BIN. Custom song/preset compatibility across firmware versions is not guaranteed; keep the backups.
 
 ## Included
+
+Latest: all review fixes — Plaits Morph and FM Quality (Eco), four-block MDD grid, BACK = Undo, encoders, MIDI CC lanes, Song Key, event-driven MDD timing and MDD file format V3. See [review fixes](../docs/custom/REVIEW_FIXES_20261027.md). Songs saved with this build lose their MDD settings on older firmware; back up first.
+
 
 Custom automation WRITE with atomic Undo/Redo, one Custom per destination, true Tie across loop boundaries, Legato and adjustable Overlap are included. See [new features and controls](../docs/custom/MDD_WRITE_TIES_20261012.md).
 
