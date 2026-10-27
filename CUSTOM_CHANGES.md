@@ -1,3 +1,7 @@
+# Base: Deluge v1.3.0-rc3 (27 October 2026)
+
+The custom firmware is merged onto upstream v1.3.0-rc3; upstream solutions are used where fixes overlap. See [RC3 integration](docs/custom/RC3_INTEGRATION_20261027.md).
+
 # Review fixes (27 October 2026)
 
 All findings from the 22 October review are applied; see [review fixes](docs/custom/REVIEW_FIXES_20261027.md). This adds Plaits Morph/Quality params, MDD file format V3, MIDI CC lanes and event-driven MDD scheduling, and removes the legacy sound-level Snake Custom. Not yet tested on hardware.

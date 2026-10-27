@@ -1,21 +1,20 @@
 {
-  "filename": "deluge-mdd-plaits-oled-review-fdadd65b.bin",
-  "source_commit": "fdadd65b00e475f5ab73d483f88608ddab9dd6cf",
-  "source_tree": "9eb4146f2ff3b0d3fe67f5c3b072cac2002829ca",
-  "source_url": "https://github.com/mileda/DelugeFirmware/tree/fdadd65b00e475f5ab73d483f88608ddab9dd6cf",
+  "filename": "deluge-mdd-plaits-oled-rc3-37bb6912.bin",
+  "source_commit": "37bb6912fa5ae5a71a9ee85f8c26da2dfc032a08",
+  "source_tree": "d8238fc670e0bb20ec5b0f2c8c8bf03ef1988142",
+  "source_url": "https://github.com/mileda/DelugeFirmware/tree/37bb6912fa5ae5a71a9ee85f8c26da2dfc032a08",
   "build_date": "2026-10-27",
   "configuration": "Release",
-  "release_type": "dev",
-  "upstream_branch": "release/1.3",
-  "upstream_commit": "3c0cb2a14",
-  "firmware_version": "1.3.0-dev-fdadd65b0",
+  "release_type": "rc",
+  "upstream_commit": "c0725ce56e",
+  "firmware_version": "1.3.0-rc-37bb6912f",
   "target": "ARM Cortex-A9, Deluge, OLED custom UI",
-  "size_bytes": 1837932,
-  "sha256": "a30736fe6dc2adcdf0bcb6b3c59ec100f125f5a70a03f733641289b3743af40f",
-  "elf_sha256": "23d3e603e439f7020432dedcb5c4fd4276fb1c7b89dd42cd15c2e769f0f7d4a7",
+  "size_bytes": 1833620,
+  "sha256": "ea4b619bae9411a20c8db2c84442246199fb4d39473a06617f4ea60d03e95d1e",
+  "elf_sha256": "3102fe2fe5318bfcb8a76f0c9a1dcc365f5a59afd499eec9251c18c523be5fcb",
   "hardware_tested": false,
   "cpu_profiled": false,
-  "build_command": "cmake -B build -S . -G 'Ninja Multi-Config' && cmake --build build --config Release (DBT v22 toolchain on PATH, DELUGE_FW_ROOT/DBT_TOOLCHAIN_PATH set)",
+  "build_command": "cmake -B build -S . -G 'Ninja Multi-Config' -DENABLE_VERSIONED_OUTPUT=TRUE -DRELEASE_TYPE=rc && cmake --build build --config Release (DBT v22 toolchain on PATH, DELUGE_FW_ROOT/DBT_TOOLCHAIN_PATH set)",
   "checks": [
     "ARM Release build without new warnings",
     "BIN produced from the recorded source commit"
@@ -25,14 +24,15 @@
     "tests/regression/mdd_features (5 PASS)",
     "tests/regression/plaits + menu_probe (10 PASS)",
     "audio_audit, fx_menu (8 groups), startup",
-    "upstream spec tests and UnitTests built 64-bit: 9/9 pass"
+    "upstream spec tests, UnitTests, OledHandshakeDriverTests, OledCVDriverTests built 64-bit: 11/11 pass"
   ],
   "limitations": [
     "Physical Deluge validation pending",
     "32-bit MemoryManagerTests and scheduler_tests not built in the build environment",
     "No hardware CPU measurement"
   ],
-  "notes": "docs/custom/REVIEW_FIXES_20261027.md",
+  "notes": "docs/custom/RC3_INTEGRATION_20261027.md",
   "toolchain": "DBT v22 / arm-none-eabi-g++ 14.2.1 20241119",
-  "licenses": "GPL-3.0-or-later combined firmware; Plaits/stmlib MIT notices retained"
+  "licenses": "GPL-3.0-or-later combined firmware; Plaits/stmlib MIT notices retained",
+  "upstream_tag": "v1.3.0-rc3"
 }

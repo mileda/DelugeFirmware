@@ -1,14 +1,14 @@
 # MDD Snake + Plaits — OLED firmware download
 
-Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC2 (Derbyshire) plus the later release/1.3 fixes. This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
+Unofficial custom firmware based on Deluge Community Firmware 1.3.0 RC3 (Derbyshire). This build targets the OLED interface. It has been compiled for ARM, but has not been tested on a physical Deluge. Treat it as an experimental build, not a stable official release.
 
 ## Download
 
-[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-review-fdadd65b.bin)
+[Download the firmware BIN](https://raw.githubusercontent.com/mileda/DelugeFirmware/main/firmware/deluge-mdd-plaits-oled-rc3-37bb6912.bin)
 
-[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/fdadd65b00e475f5ab73d483f88608ddab9dd6cf) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/fdadd65b00e475f5ab73d483f88608ddab9dd6cf.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
+[Exact corresponding source](https://github.com/mileda/DelugeFirmware/tree/37bb6912fa5ae5a71a9ee85f8c26da2dfc032a08) · [Source ZIP](https://github.com/mileda/DelugeFirmware/archive/37bb6912fa5ae5a71a9ee85f8c26da2dfc032a08.zip) · [SHA256SUMS](SHA256SUMS) · [Build record](BUILD_INFO.json)
 
-SHA-256: `a30736fe6dc2adcdf0bcb6b3c59ec100f125f5a70a03f733641289b3743af40f`
+SHA-256: `ea4b619bae9411a20c8db2c84442246199fb4d39473a06617f4ea60d03e95d1e`
 
 Earlier builds are no longer kept in this folder; they remain in the git history.
 
@@ -23,6 +23,8 @@ Earlier builds are no longer kept in this folder; they remain in the git history
 These steps follow the retained [upstream SD-card update guide](../website/src/content/docs/manual/device_overview/sd_card.mdx). To reinstall a known-working firmware, repeat the update procedure with its BIN. Custom song/preset compatibility across firmware versions is not guaranteed; keep the backups.
 
 ## Included
+
+Base: upstream `v1.3.0-rc3` (26 October 2026). See [RC3 integration](../docs/custom/RC3_INTEGRATION_20261027.md).
 
 Latest: all review fixes — Plaits Morph and FM Quality (Eco), four-block MDD grid, BACK = Undo, encoders, MIDI CC lanes, Song Key, event-driven MDD timing and MDD file format V3. See [review fixes](../docs/custom/REVIEW_FIXES_20261027.md). Songs saved with this build lose their MDD settings on older firmware; back up first.
 
